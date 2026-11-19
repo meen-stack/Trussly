@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  MANAGER
+  SUPERVISOR
+  CONTRACTOR
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+enum MilestoneStatus {
+  OPEN
+  SUBMITTED
+  PASSED
+  SIGNED_OFF
+  REJECTED
+}
+
+enum ReportStatus {
+  SUBMITTED
+  ACCEPTED
+  RETURNED
+}
+
+enum ExpenseStatus {
+  PENDING
+  MANAGER_APPROVED
+  APPROVED
+  REJECTED
+}
+
+model Company {
+  id                String    @id @default(cuid())
+  name              String
+  currency          String    @default("USD")
+  approvalThreshold Int       @default(1000000) // cents; spend above this needs owner approval
+  createdAt         DateTime  @default(now())
+  users             User[]
+  projects          Project[]
+  invites           Invite[]
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String
+  email         String          @unique
+  passwordHash  String
+  role          Role
+  title         String?
+  companyId     String
+  company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+  memberships   ProjectMember[]
+  reports       DailyReport[]   @relation("ReportAuthor")
+  expenses      Expense[]       @relation("ExpenseSubmitter")
+  notifications Notification[]
+  auditEvents   AuditEvent[]
+  resetTokens   PasswordReset[]
+}
+
+model Invite {
+  id        String    @id @default(cuid())
+  email     String
+  role      Role
+  token     String    @unique
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+model Project {
+  id          String          @id @default(cuid())
+  name        String
+  location    String
+  description String?
+  coverUrl    String?
+  status      ProjectStatus   @default(ACTIVE)
+  startDate   DateTime
+  endDate     DateTime
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  members     ProjectMember[]
+  budgetLines BudgetLine[]
+  milestones  Milestone[]
+  reports     DailyReport[]
+  auditEvents AuditEvent[]
+}
+
+model ProjectMember {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model BudgetLine {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category  String
+  budgeted  Int // cents
+  expenses  Expense[]
+}
+
+model Milestone {
+  id            String          @id @default(cuid())
+  projectId     String
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  dueDate       DateTime
+  paymentAmount Int             @default(0) // cents
+  status        MilestoneStatus @default(OPEN)
+  sortOrder     Int             @default(0)
+  submittedNote String?
+  reviewNote    String?
+  submittedAt   DateTime?
+  passedAt      DateTime?
+  signedOffAt   DateTime?
+  photos        Photo[]
+}
+
+model DailyReport {
+  id         String       @id @default(cuid())
+  projectId  String
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User         @relation("ReportAuthor", fields: [authorId], references: [id])
+  date       DateTime     @db.Date
+  weather    String
+  crewCount  Int
+  progress   Int          @default(0) // percent of overall work complete, as estimated on site
+  workDone   String
+  issues     String?
+  status     ReportStatus @default(SUBMITTED)
+  reviewNote String?
+  createdAt  DateTime     @default(now())
+  photos     Photo[]
+
+  @@unique([projectId, date])
+}
+
+model Photo {
+  id          String       @id @default(cuid())
+  url         String
+  caption     String?
+  lat         Float?
+  lng         Float?
+  takenAt     DateTime     @default(now())
+  reportId    String?
+  report      DailyReport? @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  milestoneId String?
+  milestone   Milestone?   @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id           String        @id @default(cuid())
+  budgetLineId String
+  budgetLine   BudgetLine    @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  submitterId  String
+  submitter    User          @relation("ExpenseSubmitter", fields: [submitterId], references: [id])
+  vendor       String
+  description  String
+  amount       Int // cents
+  invoiceUrl   String?
+  status       ExpenseStatus @default(PENDING)
+  reviewNote   String?
+  createdAt    DateTime      @default(now())
+  decidedAt    DateTime?
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  action     String
+  entityType String
+  entityId   String
+  detail     Json?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}

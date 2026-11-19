@@ -119,11 +119,10 @@ The end-to-end suite reseeds the demo company before it runs.
 
 ## Deploying
 
-1. Create a Postgres database (for example on [Neon](https://neon.tech)) and copy its connection string.
-2. Import this repo into [Vercel](https://vercel.com/new).
-3. Set these environment variables: `DATABASE_URL`, `AUTH_SECRET` (32+ random characters) and `APP_URL` (your site's URL). Optionally set `RESEND_API_KEY` and `EMAIL_FROM` for real emails, and `CRON_SECRET` for the daily alert.
-4. Add a Vercel Blob store to the project for photo uploads. Vercel sets `BLOB_READ_WRITE_TOKEN` for you.
-5. Run `npx prisma migrate deploy` and `npm run db:seed` against the production database.
+1. Create a Postgres database on [Neon](https://neon.tech) and copy its connection string with connection pooling turned off.
+2. Import this repo into [Vercel](https://vercel.com/new) and set `DATABASE_URL`, `AUTH_SECRET` (40+ random characters) and `APP_URL` (your site's URL). Optionally set `RESEND_API_KEY` and `EMAIL_FROM` for real emails, and `CRON_SECRET` for the daily alert.
+3. In the Vercel project, go to **Storage**, create a **Blob** store and connect it. This sets `BLOB_READ_WRITE_TOKEN` for photo uploads.
+4. Deploy. The `vercel-build` script runs the database migrations and creates the demo company the first time, so no terminal is needed.
 
 `vercel.json` schedules the missing-report check for 6 PM, Monday to Saturday.
 

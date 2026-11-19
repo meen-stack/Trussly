@@ -42,6 +42,11 @@ const ISSUES = [
 const WEATHER = ["Sunny", "Sunny", "Cloudy", "Sunny", "Light rain", "Hot", "Cloudy"];
 
 async function main() {
+  // On deploys we only seed once, so visitors' changes aren't wiped by every build.
+  if (process.argv.includes("--if-missing") && (await db.company.findFirst({ where: { name: "Northline Developments" } }))) {
+    console.log("Demo company already exists, skipping seed.");
+    return;
+  }
   // Projects first: deleting them cascades reports and invoices, which reference users.
   await db.project.deleteMany({ where: { company: { name: "Northline Developments" } } });
   await db.company.deleteMany({ where: { name: "Northline Developments" } });

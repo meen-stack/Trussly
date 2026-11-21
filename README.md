@@ -4,6 +4,8 @@
 
 **Plan • Build • Manage.** Remote construction monitoring for property developers and investors.
 
+**Live demo: [gettrussly.vercel.app](https://gettrussly.vercel.app)**. Tap any role to look around, no sign-up needed.
+
 Trussly lets the people paying for a building see how it's really going without being on site. Supervisors file daily reports with geotagged photos, contractors submit evidence for milestones, managers inspect and approve, and owners sign off before money moves. Every invoice is tracked against a budget line, so overruns show up while they're still small.
 
 ![Trussly front page: log in, sign up or try the demo](docs/screenshots/landing.png)
@@ -14,7 +16,7 @@ Trussly lets the people paying for a building see how it's really going without 
 
 ## Try the demo
 
-Run it locally (below), then pick a role on the front page. No sign-up is needed: the role tiles log you straight in. The product tour lives at `/about`. The seeded company, **Northline Developments**, has three projects in different states: one on track, one at risk and over budget on two lines, and one just starting. Approvals are already waiting for each role.
+Open the [live demo](https://gettrussly.vercel.app) or run it locally (below), then pick a role on the front page. No sign-up is needed: the role tiles log you straight in. The product tour lives at `/about`. The seeded company, **Northline Developments**, has three projects in different states: one on track, one at risk and over budget on two lines, and one just starting. Approvals are already waiting for each role.
 
 | Role | Person | What to try |
 | --- | --- | --- |

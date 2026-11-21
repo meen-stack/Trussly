@@ -17,5 +17,7 @@ export async function sendEmail(to: string, subject: string, text: string) {
 }
 
 export function appUrl(path: string) {
-  return `${process.env.APP_URL ?? "http://localhost:3000"}${path}`;
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const base = process.env.APP_URL ?? (vercel ? `https://${vercel}` : "http://localhost:3000");
+  return `${base}${path}`;
 }

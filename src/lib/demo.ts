@@ -5,4 +5,5 @@ export const DEMO_EMAILS: Record<string, string> = {
   MANAGER: "marcus@demo.trussly.app",
   SUPERVISOR: "sam@demo.trussly.app",
   CONTRACTOR: "carla@demo.trussly.app",
+  FINANCE: "fiona@demo.trussly.app",
 };

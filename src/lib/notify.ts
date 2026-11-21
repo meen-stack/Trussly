@@ -16,7 +16,7 @@ export async function notifyUsers(userIds: string[], note: Note) {
   );
 }
 
-/** Notifies project members with the given roles. Owners are included through company membership. */
+/** Notifies project members with the given roles. Owners and finance are included company-wide. */
 export async function notifyProjectRoles(projectId: string, roles: Role[], note: Note, exceptUserId?: string) {
   const project = await db.project.findUnique({ where: { id: projectId }, select: { companyId: true } });
   if (!project) return;
@@ -24,7 +24,7 @@ export async function notifyProjectRoles(projectId: string, roles: Role[], note:
     where: {
       role: { in: roles },
       companyId: project.companyId,
-      OR: [{ role: "OWNER" }, { memberships: { some: { projectId } } }],
+      OR: [{ role: { in: ["OWNER", "FINANCE"] } }, { memberships: { some: { projectId } } }],
     },
     select: { id: true },
   });

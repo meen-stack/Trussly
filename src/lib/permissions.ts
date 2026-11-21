@@ -6,15 +6,13 @@ export const can = {
   manageProject: (r: Role) => r === "ADMIN" || r === "OWNER" || r === "MANAGER",
   submitReport: (r: Role) => r === "SUPERVISOR" || r === "MANAGER",
   reviewReport: (r: Role) => r === "MANAGER" || r === "ADMIN",
-  submitMilestone: (r: Role) => r === "CONTRACTOR" || r === "MANAGER",
-  inspectMilestone: (r: Role) => r === "MANAGER",
-  signOffMilestone: (r: Role) => r === "OWNER",
   submitExpense: (r: Role) => r === "CONTRACTOR" || r === "MANAGER" || r === "SUPERVISOR",
-  managerApproveExpense: (r: Role) => r === "MANAGER",
-  ownerApproveExpense: (r: Role) => r === "OWNER",
+  /** Finance records and tracks payments. */
+  pay: (r: Role) => r === "FINANCE" || r === "ADMIN",
+  seeFinance: (r: Role) => r === "FINANCE" || r === "ADMIN" || r === "OWNER" || r === "MANAGER",
   inviteUsers: (r: Role) => r === "ADMIN" || r === "OWNER",
-  /** Owners and admins see every company project; others only projects they belong to. */
-  seeAllProjects: (r: Role) => r === "ADMIN" || r === "OWNER",
+  /** Owners, admins and finance see every company project; others only projects they belong to. */
+  seeAllProjects: (r: Role) => r === "ADMIN" || r === "OWNER" || r === "FINANCE",
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
@@ -23,4 +21,5 @@ export const ROLE_LABEL: Record<Role, string> = {
   MANAGER: "Project manager",
   SUPERVISOR: "Site supervisor",
   CONTRACTOR: "Contractor",
+  FINANCE: "Accountant",
 };

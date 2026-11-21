@@ -39,7 +39,7 @@ export function ReportForm({
             ))}
           </Select>
         </Field>
-        <Field label="Workers on site">
+        <Field label="Workforce on site">
           <Input name="crewCount" type="number" min={0} defaultValue={12} required />
         </Field>
       </div>
@@ -57,8 +57,22 @@ export function ReportForm({
       <Field label="Work done today">
         <Textarea name="workDone" rows={4} placeholder="Poured level 2 slab, east side. Started blockwork on unit 3." required />
       </Field>
-      <Field label="Issues or delays" hint="Anything the manager should know. Leave blank if none.">
+      <Field label="Challenges or delays" hint="Anything the manager should know. Leave blank if none.">
         <Textarea name="issues" placeholder="Rebar delivery arrived short by 2 tonnes." />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Materials received">
+          <Textarea name="materials" rows={2} placeholder="12 t rebar, 64 m³ concrete" />
+        </Field>
+        <Field label="Equipment used">
+          <Textarea name="equipment" rows={2} placeholder="Tower crane, concrete pump" />
+        </Field>
+      </div>
+      <Field label="Site incidents" hint="Injuries, near misses or damage. Leave blank if none.">
+        <Textarea name="incidents" rows={2} placeholder="Near miss: unsecured plank on level 2 scaffold." />
+      </Field>
+      <Field label="Supervisor remarks">
+        <Textarea name="remarks" rows={2} placeholder="Good productivity. On track for Friday's pour." />
       </Field>
       <Field label="Site photos" hint="Up to 12 photos. Taken on your phone? They upload straight from the camera.">
         <Input

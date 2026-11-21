@@ -5,7 +5,8 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 
 /** Sends an email through Resend when configured; otherwise logs it so local dev works without keys. */
 export async function sendEmail(to: string, subject: string, text: string) {
-  if (!resend) {
+  // Demo accounts aren't real inboxes.
+  if (!resend || to.endsWith("@demo.trussly.app")) {
     console.log(`[email] to=${to} subject="${subject}"\n${text}`);
     return;
   }

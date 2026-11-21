@@ -11,10 +11,13 @@ test("daily report: supervisor files with a photo, manager accepts", async ({ pa
   await page.locator('input[name="date"]').fill(tomorrow);
   await page.locator('textarea[name="workDone"]').fill("E2E: poured level 3 columns on grid A to C.");
   await page.locator('textarea[name="issues"]').fill("E2E: pump arrived late.");
+  await page.locator('textarea[name="materials"]').fill("E2E: 20 m³ concrete");
+  await page.locator('textarea[name="incidents"]').fill("E2E: near miss on scaffold.");
   await page.locator('input[name="photos"]').setInputFiles(PHOTO);
   await page.getByRole("button", { name: "Submit report" }).click();
   await expect(page.getByText("E2E: poured level 3 columns")).toBeVisible();
-  await expect(page.getByText("Issue reported")).toBeVisible();
+  await expect(page.getByText("Challenges or delays")).toBeVisible();
+  await expect(page.getByText("E2E: near miss on scaffold.")).toBeVisible();
 
   await loginAs(page, "MANAGER");
   await page.goto("/notifications");
@@ -25,32 +28,62 @@ test("daily report: supervisor files with a photo, manager accepts", async ({ pa
   await expect(page.getByText("Accepted").first()).toBeVisible();
 });
 
-test("milestone: contractor submits, manager passes, owner signs off", async ({ page }) => {
+test("work: contractor submits, supervisor inspects, manager approves, owner gives final approval", async ({ page }) => {
   const title = "Level 3 and 4 frame";
-  await loginAs(page, "CONTRACTOR");
-  await openProject(page, PROJECT, "Milestones");
   const card = () => page.locator("div.rounded-xl", { has: page.getByRole("heading", { name: title }) });
-  await card().getByRole("button", { name: "Mark done" }).click();
+
+  await loginAs(page, "CONTRACTOR");
+  await openProject(page, PROJECT, "Work");
+  await card().getByRole("button", { name: "Submit completed work" }).click();
   await card().locator('input[name="photos"]').setInputFiles(PHOTO);
   await card().locator('textarea[name="note"]').fill("Frame complete to level 4.");
   await card().getByRole("button", { name: "Submit for inspection" }).click();
-  await expect(card().getByText("Awaiting review")).toBeVisible();
+  await expect(card().getByText("Awaiting inspection")).toBeVisible();
 
   await loginAs(page, "MANAGER");
-  await openProject(page, PROJECT, "Milestones");
+  await openProject(page, PROJECT, "Work");
+  await expect(card().getByRole("button", { name: "Approve work" })).toHaveCount(0);
+
+  await loginAs(page, "SUPERVISOR");
+  await page.goto("/approvals");
+  await page.getByRole("link", { name: new RegExp(title) }).click();
   await card().getByRole("button", { name: "Pass inspection" }).click();
-  await expect(card().getByText("Awaiting sign-off")).toBeVisible();
+  await expect(card().getByText("Awaiting manager")).toBeVisible();
+
+  await loginAs(page, "MANAGER");
+  await openProject(page, PROJECT, "Work");
+  await card().getByRole("button", { name: "Approve work" }).click();
+  await expect(card().getByText("Awaiting owner")).toBeVisible();
 
   await loginAs(page, "OWNER");
-  await openProject(page, PROJECT, "Milestones");
-  await card().getByRole("button", { name: /Sign off/ }).click();
-  await expect(card().getByText("Signed off")).toBeVisible();
+  await openProject(page, PROJECT, "Work");
+  await card().getByRole("button", { name: "Give final approval" }).click();
+  await expect(card().getByText("Approved · verified")).toBeVisible();
+  await expect(card().getByText("No invoice")).toBeVisible();
 
   await page.getByRole("link", { name: "Audit trail" }).click();
-  await expect(page.getByText(`signed off milestone "${title}"`).first()).toBeVisible();
+  await expect(page.getByText(`gave final approval on "${title}"`).first()).toBeVisible();
 });
 
-test("spend: large invoice needs manager then owner", async ({ page }) => {
+test("invoices: unverified work can't be approved", async ({ page }) => {
+  await loginAs(page, "CONTRACTOR");
+  await openProject(page, PROJECT, "Budget & spend");
+  await page.locator('select[name="budgetLineId"]').selectOption({ label: "Structure" });
+  await page.locator('select[name="milestoneId"]').selectOption({ label: "Level 2 slab poured" });
+  await page.locator('input[name="vendor"]').fill("E2E Slab Claim");
+  await page.locator('input[name="description"]').fill("Slab progress claim");
+  await page.locator('input[name="amount"]').fill("5000");
+  await page.getByRole("button", { name: "Submit invoice" }).click();
+  await expect(page.getByText("It can be approved once the work is verified.")).toBeVisible();
+
+  await loginAs(page, "MANAGER");
+  await openProject(page, PROJECT, "Budget & spend");
+  const row = page.locator("li", { hasText: "E2E Slab Claim" }).first();
+  await expect(row.getByText("Can be approved once the work is verified.")).toBeVisible();
+  await expect(row.getByRole("button", { name: "Approve" })).toHaveCount(0);
+});
+
+test("payments: manager and owner approve, finance pays in two parts", async ({ page }) => {
   await loginAs(page, "CONTRACTOR");
   await openProject(page, PROJECT, "Budget & spend");
   await page.locator('select[name="budgetLineId"]').selectOption({ label: "Roofing" });
@@ -60,26 +93,47 @@ test("spend: large invoice needs manager then owner", async ({ page }) => {
   await page.getByRole("button", { name: "Submit invoice" }).click();
   await expect(page.getByText("Invoice submitted for approval.")).toBeVisible();
 
-  const row = () => page.locator("tr", { hasText: "E2E Roofing Supplies" });
+  const row = () => page.locator("li", { hasText: "E2E Roofing Supplies" }).first();
 
   await loginAs(page, "MANAGER");
   await openProject(page, PROJECT, "Budget & spend");
   await row().getByRole("button", { name: "Approve" }).click();
-  await expect(row().getByText("Pending owner")).toBeVisible();
+  await expect(row().getByText("Under review")).toBeVisible();
 
   await loginAs(page, "OWNER");
   await page.goto("/approvals");
-  await page.locator("li", { hasText: "E2E Roofing Supplies" }).getByRole("button", { name: "Approve" }).click();
+  await row().getByRole("button", { name: "Approve" }).click();
   await expect(page.locator("li", { hasText: "E2E Roofing Supplies" })).toHaveCount(0);
-  await openProject(page, PROJECT, "Budget & spend");
-  await expect(row().getByText("Approved")).toBeVisible();
+
+  await loginAs(page, "FINANCE");
+  await page.goto("/finance");
+  await row().getByRole("button", { name: "Record payment" }).click();
+  await row().locator('input[name="amount"]').fill("6000");
+  await row().locator('input[name="reference"]').fill("E2E-1");
+  await row().getByRole("button", { name: "Record payment" }).click();
+  await expect(row().getByText("Partially paid")).toBeVisible();
+  await row().getByRole("button", { name: "Record payment" }).click();
+  await row().getByRole("button", { name: "Record payment" }).click();
+  await expect(page.locator("li", { hasText: "E2E Roofing Supplies" }).getByRole("button", { name: "Record payment" })).toHaveCount(0);
+
+  await loginAs(page, "CONTRACTOR");
+  await page.goto("/notifications");
+  await expect(page.getByText("Payment confirmed: $9,000").first()).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.locator("li", { hasText: "Roof membrane" }).getByText("Fully paid")).toBeVisible();
 });
 
-test("roles: contractor cannot see approval controls or create projects", async ({ page }) => {
+test("roles: contractor can't create projects, accountant can't approve work", async ({ page }) => {
   await loginAs(page, "CONTRACTOR");
   await expect(page.getByRole("link", { name: "New project" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Finance" })).toHaveCount(0);
   await page.goto("/projects/new");
   await expect(page).toHaveURL(/\/projects$/);
+
+  await loginAs(page, "FINANCE");
+  await expect(page.getByRole("link", { name: "Finance" }).first()).toBeVisible();
+  await openProject(page, PROJECT, "Work");
+  await expect(page.getByRole("button", { name: /Pass inspection|Approve work|Give final approval/ })).toHaveCount(0);
 });
 
 test("signup creates a workspace and a project", async ({ page }) => {

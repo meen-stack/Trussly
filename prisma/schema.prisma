@@ -13,6 +13,7 @@ enum Role {
   MANAGER
   SUPERVISOR
   CONTRACTOR
+  FINANCE
 }
 
 enum ProjectStatus {
@@ -22,12 +23,16 @@ enum ProjectStatus {
   COMPLETED
 }
 
+/// Work verification track. Independent of the invoice and payment track.
 enum MilestoneStatus {
-  OPEN
-  SUBMITTED
-  PASSED
-  SIGNED_OFF
-  REJECTED
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED // contractor submitted evidence, waiting for the site supervisor
+  INSPECTED // supervisor passed it, waiting for the project manager
+  AWAITING_OWNER // manager approved, value is over the owner's limit
+  CORRECTIONS // sent back to the contractor to fix and resubmit
+  VERIFIED
+  REJECTED // closed without being accepted
 }
 
 enum ReportStatus {
@@ -36,11 +41,15 @@ enum ReportStatus {
   RETURNED
 }
 
+/// Invoice and payment track. "No invoice", "Partially paid" and "Overdue" are worked out from the data.
 enum ExpenseStatus {
-  PENDING
-  MANAGER_APPROVED
+  SUBMITTED
+  OWNER_REVIEW
   APPROVED
+  PROCESSING
+  PAID
   REJECTED
+  PAYMENT_REJECTED
 }
 
 model Company {
@@ -48,6 +57,8 @@ model Company {
   name              String
   currency          String    @default("USD")
   approvalThreshold Int       @default(1000000) // cents; spend above this needs owner approval
+  retentionPercent  Int       @default(5) // held back from contractor invoices until handover
+  paymentTermsDays  Int       @default(30)
   createdAt         DateTime  @default(now())
   users             User[]
   projects          Project[]
@@ -67,6 +78,8 @@ model User {
   memberships   ProjectMember[]
   reports       DailyReport[]   @relation("ReportAuthor")
   expenses      Expense[]       @relation("ExpenseSubmitter")
+  assignedWork  Milestone[]     @relation("WorkAssignee")
+  payments      Payment[]
   notifications Notification[]
   auditEvents   AuditEvent[]
   resetTokens   PasswordReset[]
@@ -138,15 +151,21 @@ model Milestone {
   title         String
   description   String?
   dueDate       DateTime
-  paymentAmount Int             @default(0) // cents
-  status        MilestoneStatus @default(OPEN)
+  paymentAmount Int             @default(0) // cents, the value of this work
+  status        MilestoneStatus @default(NOT_STARTED)
   sortOrder     Int             @default(0)
+  assigneeId    String?
+  assignee      User?           @relation("WorkAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   submittedNote String?
+  inspectNote   String?
   reviewNote    String?
+  startedAt     DateTime?
   submittedAt   DateTime?
-  passedAt      DateTime?
-  signedOffAt   DateTime?
+  inspectedAt   DateTime?
+  approvedAt    DateTime?
+  verifiedAt    DateTime?
   photos        Photo[]
+  invoices      Expense[]
 }
 
 model DailyReport {
@@ -160,7 +179,11 @@ model DailyReport {
   crewCount  Int
   progress   Int          @default(0) // percent of overall work complete, as estimated on site
   workDone   String
-  issues     String?
+  issues     String? // challenges encountered
+  materials  String? // materials received
+  equipment  String? // equipment used
+  incidents  String? // safety incidents
+  remarks    String? // supervisor remarks
   status     ReportStatus @default(SUBMITTED)
   reviewNote String?
   createdAt  DateTime     @default(now())
@@ -190,12 +213,28 @@ model Expense {
   submitter    User          @relation("ExpenseSubmitter", fields: [submitterId], references: [id])
   vendor       String
   description  String
+  milestoneId  String?
+  milestone    Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   amount       Int // cents
+  retention    Int           @default(0) // cents held back until handover
   invoiceUrl   String?
-  status       ExpenseStatus @default(PENDING)
+  status       ExpenseStatus @default(SUBMITTED)
   reviewNote   String?
+  dueDate      DateTime?
   createdAt    DateTime      @default(now())
   decidedAt    DateTime?
+  payments     Payment[]
+}
+
+model Payment {
+  id           String   @id @default(cuid())
+  expenseId    String
+  expense      Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  amount       Int // cents
+  reference    String?
+  paidAt       DateTime @default(now())
+  recordedById String
+  recordedBy   User     @relation(fields: [recordedById], references: [id], onDelete: Cascade)
 }
 
 model Notification {

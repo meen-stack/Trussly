@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { forecastFinalCost, plannedProgress, summarizeBudget } from "./budget";
+import { COMMITTED, forecastFinalCost, plannedProgress, summarizeBudget } from "./budget";
 
 /** Everything the project overview and dashboard need, computed in one place. */
 export async function loadProjectSummary(projectId: string) {
@@ -17,8 +17,8 @@ export async function loadProjectSummary(projectId: string) {
   const progress = latest?.progress ?? 0;
   const planned = plannedProgress(project.startDate, project.endDate);
   const forecast = forecastFinalCost(budget.spent, progress);
-  const signedOff = project.milestones.filter((m) => m.status === "SIGNED_OFF").length;
-  const overdue = project.milestones.filter((m) => m.status !== "SIGNED_OFF" && m.dueDate < new Date());
+  const signedOff = project.milestones.filter((m) => m.status === "VERIFIED").length;
+  const overdue = project.milestones.filter((m) => m.status !== "VERIFIED" && m.status !== "REJECTED" && m.dueDate < new Date());
 
   const progressSeries = project.reports.map((r) => ({
     t: r.date.getTime(),
@@ -28,7 +28,7 @@ export async function loadProjectSummary(projectId: string) {
 
   const approved = project.budgetLines
     .flatMap((l) => l.expenses)
-    .filter((e) => e.status === "APPROVED" && e.decidedAt)
+    .filter((e) => COMMITTED.includes(e.status) && e.decidedAt)
     .sort((a, b) => a.decidedAt!.getTime() - b.decidedAt!.getTime());
   let running = 0;
   const spendSeries = [{ t: project.startDate.getTime(), spent: 0 }].concat(

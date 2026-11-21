@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export async function loginAs(page: Page, role: "OWNER" | "MANAGER" | "SUPERVISOR" | "CONTRACTOR") {
+export async function loginAs(page: Page, role: "OWNER" | "MANAGER" | "SUPERVISOR" | "CONTRACTOR" | "FINANCE") {
   await page.context().clearCookies();
   await page.goto("/login");
   await page.locator(`form:has(input[value="${role}"]) button`).click();

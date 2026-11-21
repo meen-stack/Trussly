@@ -21,7 +21,7 @@ export default async function TeamPage({ params }: PageProps<"/projects/[id]/tea
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
-        <CardHeader title="Project team" subtitle="Owners and admins can see every project automatically." />
+        <CardHeader title="Project team" subtitle="Owners, admins and accountants can see every project automatically." />
         <ul className="divide-y divide-line">
           {members.map((m) => (
             <li key={m.id} className="flex items-center gap-3 px-5 py-3">

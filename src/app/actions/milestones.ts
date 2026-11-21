@@ -4,30 +4,35 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
-import { nextMilestoneStatus, type MilestoneAction } from "@/lib/workflow";
-import { audit, notifyProjectRoles } from "@/lib/notify";
+import { NEEDS_NOTE, nextWorkStatus, type WorkAction } from "@/lib/workflow";
+import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { formatMoney } from "@/lib/money";
 import { filesFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
 
-const VERB: Record<MilestoneAction, string> = {
-  submit: "submitted",
+const VERB: Record<WorkAction, string> = {
+  start: "started work on",
+  submit: "submitted work on",
   pass: "passed inspection on",
-  reject: "rejected",
-  signOff: "signed off",
+  fail: "asked for corrections on",
+  approve: "approved work on",
+  return: "sent back for corrections",
+  finalApprove: "gave final approval on",
+  reject: "rejected work on",
 };
 
-export async function transitionMilestone(projectId: string, milestoneId: string, _: FormState, form: FormData): Promise<FormState> {
+export async function transitionWork(projectId: string, milestoneId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const project = await getProjectForUser(user, projectId);
-  const action = String(form.get("action")) as MilestoneAction;
+  const action = String(form.get("action")) as WorkAction;
   const note = String(form.get("note") ?? "").trim() || null;
-  const milestone = await db.milestone.findFirst({ where: { id: milestoneId, projectId: project.id } });
-  if (!milestone) return { error: "Milestone not found." };
+  const work = await db.milestone.findFirst({ where: { id: milestoneId, projectId: project.id } });
+  if (!work) return { error: "Work item not found." };
+  if (user.role === "CONTRACTOR" && work.assigneeId && work.assigneeId !== user.id) return { error: "This work is assigned to another contractor." };
 
-  const result = nextMilestoneStatus(milestone.status, action, user.role);
+  const result = nextWorkStatus(work.status, action, user.role, work.paymentAmount, user.company.approvalThreshold);
   if (!result.ok) return { error: result.error };
-  if (action === "reject" && !note) return { error: "Say why so the work can be fixed." };
+  if (NEEDS_NOTE.includes(action) && !note) return { error: "Say what needs fixing so the contractor knows." };
 
   const files = action === "submit" ? filesFrom(form, "photos") : [];
   if (action === "submit" && files.length === 0) return { error: "Attach at least one photo as evidence." };
@@ -40,36 +45,53 @@ export async function transitionMilestone(projectId: string, milestoneId: string
 
   const now = new Date();
   await db.milestone.update({
-    where: { id: milestone.id },
+    where: { id: work.id },
     data: {
       status: result.next,
-      ...(action === "submit" && { submittedNote: note, submittedAt: now, reviewNote: null }),
-      ...(action === "pass" && { passedAt: now, reviewNote: note }),
-      ...(action === "reject" && { reviewNote: note }),
-      ...(action === "signOff" && { signedOffAt: now }),
+      ...(action === "start" && { startedAt: now }),
+      ...(action === "submit" && { submittedNote: note, submittedAt: now, inspectNote: null, reviewNote: null, startedAt: work.startedAt ?? now }),
+      ...((action === "pass" || action === "fail") && { inspectNote: note, inspectedAt: now }),
+      ...(action === "approve" && { reviewNote: note, approvedAt: now, ...(result.next === "VERIFIED" && { verifiedAt: now }) }),
+      ...(action === "finalApprove" && { verifiedAt: now, ...(note && { reviewNote: note }) }),
+      ...((action === "return" || action === "reject") && { reviewNote: note }),
       ...(urls.length && { photos: { create: urls.map((url) => ({ url, caption: note })) } }),
     },
   });
-  await audit(user.id, `${VERB[action]} milestone "${milestone.title}"`, "Milestone", milestone.id, project.id, note ? { note } : undefined);
+  await audit(user.id, `${VERB[action]} "${work.title}"`, "Milestone", work.id, project.id, note ? { note } : undefined);
 
   const href = `/projects/${project.id}/milestones`;
-  if (action === "submit") {
-    await notifyProjectRoles(project.id, ["MANAGER"], { title: `Ready for inspection: ${milestone.title}`, body: `${user.name} marked this milestone done on ${project.name}.`, href }, user.id);
-  } else if (action === "pass") {
-    await notifyProjectRoles(project.id, ["OWNER"], {
-      title: `Ready for sign-off: ${milestone.title}`,
-      body: `${user.name} passed inspection. Signing off releases ${formatMoney(milestone.paymentAmount)}.`,
-      href,
-    });
-  } else if (action === "reject") {
-    await notifyProjectRoles(project.id, ["CONTRACTOR", "MANAGER"], { title: `Milestone rejected: ${milestone.title}`, body: note ?? "", href }, user.id);
-  } else {
-    await notifyProjectRoles(project.id, ["MANAGER", "CONTRACTOR"], {
-      title: `Signed off: ${milestone.title}`,
-      body: `${user.name} signed off. ${formatMoney(milestone.paymentAmount)} is released for payment.`,
-      href,
-    });
+  const contractor = work.assigneeId ? [work.assigneeId] : [];
+  const tellContractor = (title: string, body: string) =>
+    contractor.length ? notifyUsers(contractor, { title, body, href }) : notifyProjectRoles(project.id, ["CONTRACTOR"], { title, body, href }, user.id);
+  const value = formatMoney(work.paymentAmount, user.company.currency);
+
+  switch (action) {
+    case "submit":
+      await notifyProjectRoles(project.id, ["SUPERVISOR"], { title: `Inspection requested: ${work.title}`, body: `${user.name} submitted work with photos on ${project.name}.`, href }, user.id);
+      break;
+    case "pass":
+      await notifyProjectRoles(project.id, ["MANAGER"], { title: `Ready for your review: ${work.title}`, body: `${user.name} inspected and passed the work.`, href }, user.id);
+      break;
+    case "fail":
+    case "return":
+      await tellContractor(`Corrections needed: ${work.title}`, note ?? "");
+      break;
+    case "reject":
+      await tellContractor(`Work rejected: ${work.title}`, note ?? "");
+      break;
+    case "approve":
+      if (result.next === "AWAITING_OWNER") {
+        await notifyProjectRoles(project.id, ["OWNER"], { title: `Final approval needed: ${work.title}`, body: `${user.name} approved ${value} of work, over your limit.`, href });
+      } else {
+        await tellContractor(`Work approved: ${work.title}`, `Verified by ${user.name}. You can invoice for it now.`);
+      }
+      break;
+    case "finalApprove":
+      await tellContractor(`Work approved: ${work.title}`, `${user.name} gave final approval. You can invoice for it now.`);
+      await notifyProjectRoles(project.id, ["MANAGER"], { title: `Work verified: ${work.title}`, body: `${user.name} gave final approval on ${value} of work.`, href }, user.id);
+      break;
   }
   revalidatePath(`/projects/${project.id}`, "layout");
+  revalidatePath("/approvals");
   return { success: "Done." };
 }

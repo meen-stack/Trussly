@@ -1,16 +1,17 @@
-import { Building2, ClipboardCheck, HardHat, Wrench } from "lucide-react";
+import { Building2, Calculator, ClipboardCheck, HardHat, Wrench } from "lucide-react";
 import { demoLogin } from "@/app/actions/auth";
 
 const ROLES = [
-  { role: "OWNER", name: "Olivia", label: "Owner", body: "Funds the build. Signs off milestones and big spend.", Icon: Building2 },
-  { role: "MANAGER", name: "Marcus", label: "Project manager", body: "Reviews reports, inspects work, approves invoices.", Icon: ClipboardCheck },
-  { role: "SUPERVISOR", name: "Sam", label: "Site supervisor", body: "Files the daily report with photos from site.", Icon: HardHat },
-  { role: "CONTRACTOR", name: "Carla", label: "Contractor", body: "Submits finished work and invoices.", Icon: Wrench },
+  { role: "OWNER", name: "Olivia", label: "Owner", body: "Funds the build. Gives final approval on big work and spend.", Icon: Building2 },
+  { role: "MANAGER", name: "Marcus", label: "Project manager", body: "Runs the projects. Reviews inspected work and approves invoices.", Icon: ClipboardCheck },
+  { role: "SUPERVISOR", name: "Sam", label: "Site supervisor", body: "Files daily reports and inspects submitted work on site.", Icon: HardHat },
+  { role: "CONTRACTOR", name: "Carla", label: "Contractor", body: "Submits finished work with photos, then invoices for it.", Icon: Wrench },
+  { role: "FINANCE", name: "Fiona", label: "Accountant", body: "Pays approved invoices and tracks what's owed and overdue.", Icon: Calculator },
 ];
 
 export function DemoPicker({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   return (
-    <div className={compact ? "grid grid-cols-2 gap-2" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"}>
+    <div className={compact ? "grid grid-cols-2 gap-2 [&>form:last-child]:col-span-2" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-5"}>
       {ROLES.map(({ role, name, label, body, Icon }) => (
         <form key={role} action={demoLogin}>
           <input type="hidden" name="role" value={role} />

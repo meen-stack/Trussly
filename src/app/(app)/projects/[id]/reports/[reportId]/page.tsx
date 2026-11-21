@@ -30,16 +30,39 @@ export default async function ReportPage({ params }: PageProps<"/projects/[id]/r
         <p className="mt-1 text-sm text-muted">Filed by {report.author.name} at {format(report.createdAt, "h:mm a")}</p>
         <div className="mt-5 flex flex-wrap gap-4 text-sm">
           <span className="flex items-center gap-1.5"><CloudSun className="h-4 w-4 text-muted" /> {report.weather}</span>
-          <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-muted" /> {report.crewCount} on site</span>
+          <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-muted" /> {report.crewCount} workers on site</span>
           <span className="font-medium">{report.progress}% complete overall</span>
         </div>
         <h3 className="mt-6 text-sm font-semibold">Work done</h3>
         <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{report.workDone}</p>
+        <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+          {[
+            ["Materials received", report.materials],
+            ["Equipment used", report.equipment],
+            ["Supervisor remarks", report.remarks],
+          ]
+            .filter(([, v]) => v)
+            .map(([k, v]) => (
+              <div key={k}>
+                <dt className="font-semibold">{k}</dt>
+                <dd className="mt-1 whitespace-pre-line text-muted">{v}</dd>
+              </div>
+            ))}
+        </dl>
+        {report.incidents && (
+          <div className="mt-5 flex gap-3 rounded-lg border border-bad/20 bg-bad/5 p-4 text-sm">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-bad" />
+            <div>
+              <p className="font-semibold text-bad">Site incident</p>
+              <p className="mt-1 whitespace-pre-line">{report.incidents}</p>
+            </div>
+          </div>
+        )}
         {report.issues && (
           <div className="mt-5 flex gap-3 rounded-lg border border-bad/20 bg-bad/5 p-4 text-sm">
             <AlertTriangle className="h-4 w-4 shrink-0 text-bad" />
             <div>
-              <p className="font-semibold text-bad">Issue reported</p>
+              <p className="font-semibold text-bad">Challenges or delays</p>
               <p className="mt-1 whitespace-pre-line">{report.issues}</p>
             </div>
           </div>

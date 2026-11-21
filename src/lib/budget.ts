@@ -9,6 +9,10 @@ export type LineInput = {
 
 export const WARN_AT = 0.9;
 
+/** Invoices that commit budget: approved, being paid or paid. */
+export const COMMITTED = ["APPROVED", "PROCESSING", "PAID"];
+export const IN_REVIEW = ["SUBMITTED", "OWNER_REVIEW"];
+
 export type LineSummary = {
   id: string;
   category: string;
@@ -20,9 +24,9 @@ export type LineSummary = {
 };
 
 export function summarizeLine(line: LineInput): LineSummary {
-  const spent = line.expenses.filter((e) => e.status === "APPROVED").reduce((s, e) => s + e.amount, 0);
+  const spent = line.expenses.filter((e) => COMMITTED.includes(e.status)).reduce((s, e) => s + e.amount, 0);
   const pending = line.expenses
-    .filter((e) => e.status === "PENDING" || e.status === "MANAGER_APPROVED")
+    .filter((e) => IN_REVIEW.includes(e.status))
     .reduce((s, e) => s + e.amount, 0);
   const ratio = line.budgeted > 0 ? spent / line.budgeted : spent > 0 ? Infinity : 0;
   const state = ratio > 1 ? "over" : ratio >= WARN_AT ? "warning" : "ok";

@@ -1,19 +1,12 @@
+import type { ExpenseStatus, MilestoneStatus } from "@prisma/client";
 import { Badge, type Tone } from "./ui";
+import { PAYMENT_LABEL, paymentKey, workLabel, workPaymentKey, type InvoiceLike, type Label } from "@/lib/status";
 
 const MAP: Record<string, [string, Tone]> = {
-  // milestones
-  OPEN: ["Open", "neutral"],
-  SUBMITTED: ["Awaiting review", "brand"],
-  PASSED: ["Awaiting sign-off", "warn"],
-  SIGNED_OFF: ["Signed off", "ok"],
-  REJECTED: ["Rejected", "bad"],
   // reports
+  SUBMITTED: ["Awaiting review", "brand"],
   ACCEPTED: ["Accepted", "ok"],
   RETURNED: ["Returned", "bad"],
-  // expenses
-  PENDING: ["Pending manager", "brand"],
-  MANAGER_APPROVED: ["Pending owner", "warn"],
-  APPROVED: ["Approved", "ok"],
   // projects
   PLANNING: ["Planning", "neutral"],
   ACTIVE: ["Active", "ok"],
@@ -21,7 +14,24 @@ const MAP: Record<string, [string, Tone]> = {
   COMPLETED: ["Completed", "steel"],
 };
 
+/** Report and project statuses. */
 export function StatusBadge({ status }: { status: string }) {
   const [label, tone] = MAP[status] ?? [status, "neutral"];
   return <Badge tone={tone}>{label}</Badge>;
+}
+
+export function LabelBadge({ l }: { l: Label }) {
+  return <Badge tone={l.tone}>{l.label}</Badge>;
+}
+
+export function WorkBadge({ status, invoices }: { status: MilestoneStatus; invoices?: { status: ExpenseStatus }[] }) {
+  return <LabelBadge l={workLabel(status, invoices)} />;
+}
+
+export function PaymentBadge({ invoice }: { invoice: InvoiceLike }) {
+  return <LabelBadge l={PAYMENT_LABEL[paymentKey(invoice)]} />;
+}
+
+export function WorkPaymentBadge({ invoices }: { invoices: InvoiceLike[] }) {
+  return <LabelBadge l={PAYMENT_LABEL[workPaymentKey(invoices)]} />;
 }

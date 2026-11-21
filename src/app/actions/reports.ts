@@ -23,6 +23,10 @@ export async function submitReport(projectId: string, _: FormState, form: FormDa
       progress: z.coerce.number().int().min(0).max(100),
       workDone: z.string().min(5, "Describe the work done today"),
       issues: z.string().optional(),
+      materials: z.string().optional(),
+      equipment: z.string().optional(),
+      incidents: z.string().optional(),
+      remarks: z.string().optional(),
     })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -50,6 +54,10 @@ export async function submitReport(projectId: string, _: FormState, form: FormDa
       progress: d.progress,
       workDone: d.workDone,
       issues: d.issues || null,
+      materials: d.materials || null,
+      equipment: d.equipment || null,
+      incidents: d.incidents || null,
+      remarks: d.remarks || null,
       photos: {
         create: urls.map((url) => ({ url, lat: Number.isFinite(lat) ? lat : null, lng: Number.isFinite(lng) ? lng : null })),
       },
@@ -61,7 +69,7 @@ export async function submitReport(projectId: string, _: FormState, form: FormDa
     ["MANAGER"],
     {
       title: `New daily report: ${project.name}`,
-      body: `${user.name} filed today's report${d.issues ? " and flagged an issue" : ""}.`,
+      body: `${user.name} filed today's report${d.incidents ? " and reported a site incident" : d.issues ? " and flagged an issue" : ""}.`,
       href: `/projects/${project.id}/reports/${report.id}`,
     },
     user.id,

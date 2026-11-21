@@ -134,13 +134,18 @@ export async function updateBudgetLine(projectId: string, form: FormData) {
 export async function addMilestone(projectId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const project = await getProjectForUser(user, projectId);
-  if (!can.manageProject(user.role)) return { error: "Only managers and owners can add milestones." };
+  if (!can.manageProject(user.role)) return { error: "Only managers and owners can add work." };
   const parsed = z
-    .object({ title: z.string().min(2, "Give the milestone a title"), description: z.string().optional(), dueDate: z.coerce.date(), payment: z.string() })
+    .object({ title: z.string().min(2, "Give the work a title"), description: z.string().optional(), dueDate: z.coerce.date(), payment: z.string() })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const payment = parsed.data.payment ? parseMoney(parsed.data.payment) : 0;
-  if (payment === null) return { error: "Enter the payment as a number." };
+  if (payment === null) return { error: "Enter the value as a number." };
+  const assigneeId = String(form.get("assigneeId") ?? "") || null;
+  if (assigneeId) {
+    const member = await db.projectMember.findFirst({ where: { projectId: project.id, userId: assigneeId, user: { role: "CONTRACTOR" } } });
+    if (!member) return { error: "Assign a contractor on this project." };
+  }
   const count = await db.milestone.count({ where: { projectId: project.id } });
   const m = await db.milestone.create({
     data: {
@@ -150,9 +155,11 @@ export async function addMilestone(projectId: string, _: FormState, form: FormDa
       dueDate: parsed.data.dueDate,
       paymentAmount: payment,
       sortOrder: count,
+      assigneeId,
     },
   });
-  await audit(user.id, `added milestone "${m.title}"`, "Milestone", m.id, project.id);
+  if (assigneeId) await notifyUsers([assigneeId], { title: `New work assigned: ${m.title}`, body: `${user.name} assigned you work on ${project.name}.`, href: `/projects/${project.id}/milestones` });
+  await audit(user.id, `added work "${m.title}"`, "Milestone", m.id, project.id);
   revalidatePath(`/projects/${project.id}`, "layout");
-  return { success: "Milestone added." };
+  return { success: "Work added." };
 }

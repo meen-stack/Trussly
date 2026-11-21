@@ -20,49 +20,70 @@ Open the [live demo](https://gettrussly.vercel.app) or run it locally (below), t
 
 | Role | Person | What to try |
 | --- | --- | --- |
-| Owner | Olivia | Sign off a milestone, approve an invoice over the $10,000 limit |
-| Project manager | Marcus | Review today's report, inspect submitted work, approve invoices |
-| Site supervisor | Sam | File a daily report from a phone with photos |
-| Contractor | Carla | Mark a milestone done with photo evidence, submit an invoice |
+| Owner | Olivia | Give final approval on $180,000 of work, approve an invoice over the $10,000 limit |
+| Project manager | Marcus | Approve inspected electrical work, review today's report, approve invoices |
+| Site supervisor | Sam | Inspect the level 2 slab, file a daily report from a phone with photos |
+| Contractor | Carla | Fix and resubmit the roof work, submit work with photos, invoice for verified work |
+| Accountant | Fiona | Pay an overdue invoice, record a partial payment, check the financial report |
 
 All demo accounts use the password `trussly-demo`.
 
+## How the money works
+
+Trussly keeps **work** and **payment** on two separate tracks, because "the work is done", "the work is verified", "the invoice is approved" and "the contractor is paid" are four different facts.
+
+```
+Work:     Not started → In progress → Awaiting inspection → Awaiting manager → (Awaiting owner) → Approved · verified
+                                ↖────────── Requires corrections ──────────┘
+Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payment → Payment processing → Partially paid → Fully paid
+```
+
+- An invoice tied to work **can't be approved until that work is verified**.
+- Work and invoices over the company's limit ($10,000 in the demo) need the owner as well as the manager.
+- 5% **retention** is held on work invoices until handover.
+- "No invoice", "Partially paid", "Overdue" and "Completed" are worked out from the data (invoices, payments, due dates), so they can never drift out of sync.
+
 ## Features
 
-- **Daily site reports:** weather, crew size, work done, issues and photos tagged with GPS location. Mobile-first, with the camera opening directly. Managers accept or send back with a note, and a daily job alerts managers when a site hasn't reported by 6 PM.
-- **Milestone verification:** a three-step sign-off (contractor submits evidence, manager inspects, owner signs off) tied to a payment amount. Rejections need a reason and can be resubmitted.
-- **Budget against actual:** invoices are approved against budget lines. Lines turn amber at 90% and red past 100%. Invoices over the company's limit need the owner as well as the manager. Crossing a threshold sends an alert.
-- **Forecast final cost:** approved spend divided by site-reported progress, compared with a straight-line schedule to flag projects that are behind.
-- **Dashboard:** portfolio totals, projects at risk, budget warnings, a progress chart against plan, approved spend over time and budget by line.
-- **Photo timeline:** every report and milestone photo, grouped by day.
-- **Audit trail:** every approval, rejection and budget change is recorded with who did it and when.
-- **Notifications:** in-app and by email (through Resend) for every step that needs someone.
+- **Work verification:** the contractor submits completed work with photos, the site supervisor inspects and passes it or asks for corrections, the project manager approves, and the owner gives final approval above the limit. Every step is recorded.
+- **Invoices and payments:** contractors invoice against budget lines and verified work. Managers and owners approve, and the accountant records full or partial payments with references, or refuses a payment with a reason. Due dates follow the company's payment terms.
+- **Finance:** what's approved and unpaid, what's overdue, what was paid this month, retention held, payment history and a budget, committed and paid report for each project.
+- **Daily site reports:** weather, workforce, work done, challenges, materials received, equipment used, site incidents, supervisor remarks and photos tagged with GPS location. Mobile-first, with the camera opening directly.
+- **Dashboards for each role:** owners see the portfolio, budget warnings and approvals. Supervisors see inspections and today's reports. Contractors see their work, invoices and what they're owed. Accountants see payments due and overdue.
+- **Budget against actual:** lines turn amber at 90% and red past 100%, and crossing a threshold sends an alert.
+- **Forecast final cost:** committed spend divided by site-reported progress, compared with a straight-line schedule to flag projects that are behind.
+- **Notifications:** in-app and by email (through Resend) for work submitted, inspection requests, approvals, corrections, new invoices, invoice approvals, payments, budget alerts, deadlines coming up and overdue work and invoices.
+- **Photo timeline and audit trail:** every photo by day, and every approval, rejection, payment and budget change with who did it and when.
 - **Accounts:** sign-up creates a company, owners invite people by role, and users can reset their password by email.
 
 | | |
 | --- | --- |
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Project overview](docs/screenshots/project-overview.png) |
-| ![Milestones](docs/screenshots/milestones.png) | ![Budget and spend](docs/screenshots/budget.png) |
+| ![Work verification](docs/screenshots/milestones.png) | ![Budget and spend](docs/screenshots/budget.png) |
+| ![Finance](docs/screenshots/finance.png) | ![Contractor dashboard](docs/screenshots/contractor-dashboard.png) |
 | ![Product tour](docs/screenshots/about.png) | ![Photo timeline](docs/screenshots/photos.png) |
 
 <p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"></p>
 
 ## Roles and permissions
 
-| | Admin | Owner | Manager | Supervisor | Contractor |
-| --- | :-: | :-: | :-: | :-: | :-: |
-| See all company projects | ✓ | ✓ | | | |
-| Create projects, edit budget and milestones | ✓ | ✓ | ✓ | | |
-| File daily reports | | | ✓ | ✓ | |
-| Review daily reports | ✓ | | ✓ | | |
-| Submit milestone evidence | | | ✓ | | ✓ |
-| Inspect milestones | | | ✓ | | |
-| Sign off milestones | | ✓ | | | |
-| Submit invoices | | | ✓ | ✓ | ✓ |
-| Approve invoices | | over limit | ✓ | | |
-| Invite people, company settings | ✓ | ✓ | | | |
+| | Admin | Owner | Manager | Supervisor | Contractor | Accountant |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| See all company projects | ✓ | ✓ | | | | ✓ |
+| Create projects, assign people, add work and budgets | ✓ | ✓ | ✓ | | | |
+| File daily reports | | | ✓ | ✓ | | |
+| Review daily reports | ✓ | | ✓ | | | |
+| Submit work with photos | | | ✓ | | ✓ | |
+| Inspect work | | | ✓ | ✓ | | |
+| Approve inspected work | | | ✓ | | | |
+| Final approval on work | | over limit | | | | |
+| Submit invoices | | | ✓ | ✓ | ✓ | |
+| Approve invoices | | over limit | ✓ | | | |
+| Record and refuse payments | ✓ | | | | | ✓ |
+| Finance page | ✓ | ✓ | ✓ | | | ✓ |
+| Invite people, company settings | ✓ | ✓ | | | | |
 
-The rules live in [`src/lib/permissions.ts`](src/lib/permissions.ts). The approval state machines live in [`src/lib/workflow.ts`](src/lib/workflow.ts). Both are checked on the server for every action, not just hidden in the UI.
+The rules live in [`src/lib/permissions.ts`](src/lib/permissions.ts). The work and payment state machines live in [`src/lib/workflow.ts`](src/lib/workflow.ts), and the worked-out statuses in [`src/lib/status.ts`](src/lib/status.ts). Both are checked on the server for every action, not just hidden in the UI.
 
 ## Tech stack
 
@@ -81,7 +102,7 @@ The rules live in [`src/lib/permissions.ts`](src/lib/permissions.ts). The approv
 
 ```
 prisma/
-  schema.prisma        10 tables: companies, users, projects, budget lines, milestones, reports, photos, expenses, notifications, audit events
+  schema.prisma        companies, users, projects, budget lines, work, reports, photos, invoices, payments, notifications, audit events
   seed.ts              demo company with dates relative to today
 src/
   app/
@@ -92,11 +113,12 @@ src/
   components/          UI kit, charts, forms
   lib/
     budget.ts          budget, forecast and schedule maths (pure, unit tested)
-    workflow.ts        milestone and invoice state machines (pure, unit tested)
+    workflow.ts        work and invoice state machines (pure, unit tested)
+    status.ts          payment and work statuses worked out from the data
     permissions.ts     role rules
 tests/
   unit/                Vitest
-  e2e/                 Playwright: report, milestone, invoice, roles, sign-up flows
+  e2e/                 Playwright: report, work verification, invoice, payment, roles, sign-up flows
 ```
 
 ## Running locally
@@ -129,10 +151,14 @@ The end-to-end suite reseeds the demo company before it runs.
 3. In the Vercel project, go to **Storage**, create a **Blob** store and connect it. This sets `BLOB_READ_WRITE_TOKEN` for photo uploads.
 4. Deploy. The `vercel-build` script runs the database migrations and creates the demo company the first time, so no terminal is needed.
 
-`vercel.json` schedules the missing-report check for 6 PM, Monday to Saturday.
+`vercel.json` schedules the daily checks for 6 PM, Monday to Saturday: missing site reports, upcoming and overdue work, and overdue invoices.
 
 ## Roadmap
 
+- Change orders and purchase orders
+- Document management and digital signatures
+- Contractor performance ratings and disputes
+- Retention release at handover
 - Weekly PDF report for owners
 - Material procurement and delivery tracking
 - Offline drafts for sites with poor signal

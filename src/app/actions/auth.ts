@@ -86,7 +86,7 @@ export async function inviteUser(_: FormState, form: FormData): Promise<FormStat
   const me = await requireUser();
   if (!can.inviteUsers(me.role)) return { error: "Only owners and admins can invite people." };
   const parsed = z
-    .object({ email, role: z.enum(["ADMIN", "OWNER", "MANAGER", "SUPERVISOR", "CONTRACTOR"]) })
+    .object({ email, role: z.enum(["ADMIN", "OWNER", "MANAGER", "SUPERVISOR", "CONTRACTOR", "FINANCE"]) })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   if (await db.user.findUnique({ where: { email: parsed.data.email } })) return { error: "That person already has an account." };

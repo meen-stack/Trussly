@@ -2,7 +2,7 @@
  * Seeds the demo company used by the "explore the demo" buttons.
  * Dates are relative to today so the demo always looks current. Safe to re-run: it rebuilds the demo company.
  */
-import { PrismaClient, type MilestoneStatus, type ExpenseStatus, type Role } from "@prisma/client";
+import { PrismaClient, type MilestoneStatus, type ExpenseStatus, type Role, type User } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DEMO_EMAILS, DEMO_PASSWORD } from "../src/lib/demo";
 
@@ -40,11 +40,15 @@ const ISSUES = [
   "Inspector asked for extra cover on two columns. Rework needed.",
 ];
 const WEATHER = ["Sunny", "Sunny", "Cloudy", "Sunny", "Light rain", "Hot", "Cloudy"];
+const MATERIALS = ["12 t rebar from Texas Rebar Supply", "64 m³ ready-mix concrete", "3,000 concrete blocks", "Formwork plywood, 80 sheets", "Electrical conduit and boxes", null, null];
+const EQUIPMENT = ["Tower crane, concrete pump", "Tower crane, 2 mixers", "Excavator, dumper", "Scaffold hoist", "Tower crane"];
+const INCIDENTS = ["Near miss: unsecured plank on level 2 scaffold. Fixed and toolbox talk held.", "Minor cut to a labourer's hand. First aid given, back at work."];
+const REMARKS = ["Good productivity today. On track for the slab pour.", "Crew stretched thin. Asked the contractor for 4 more fixers.", "Housekeeping needs improving on level 1.", "Quality of blockwork is good.", null, null];
 
 async function main() {
   // On deploys we only seed once, so visitors' changes aren't wiped by every build.
-  // Checking the owner's email (not just the company) means a rename of the demo accounts reseeds once.
-  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: DEMO_EMAILS.OWNER } }))) {
+  // Checking the newest demo account (not just the company) means deploys that add demo data reseed once.
+  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: DEMO_EMAILS.FINANCE } }))) {
     console.log("Demo company already exists, skipping seed.");
     return;
   }
@@ -64,7 +68,11 @@ async function main() {
   const carla = await mk("Carla Mendes", "CONTRACTOR", DEMO_EMAILS.CONTRACTOR, "Mendes Structural Ltd");
   const dev = await mk("Dev Patel", "SUPERVISOR", "dev@demo.trussly.app", "Site Supervisor");
   const ruth = await mk("Ruth Alvarez", "CONTRACTOR", "ruth@demo.trussly.app", "Alvarez Electrical");
+  const fiona = await mk("Fiona Reyes", "FINANCE", DEMO_EMAILS.FINANCE, "Finance Officer");
 
+  // Work items: title, deadline (days from today), value, work status, assignee, invoice, notes.
+  type Inv = { status: ExpenseStatus; paidShare?: number; dueIn?: number; note?: string };
+  type Work = { title: string; due: number; value: number; status: MilestoneStatus; who: User | null; line: string; inv?: Inv; note?: string };
   type Spec = {
     name: string;
     location: string;
@@ -74,12 +82,13 @@ async function main() {
     floors: number;
     progress: number; // today
     budget: number;
-    lines: [string, number, number][]; // category, share of budget, share of that line spent
-    supervisor: typeof sam;
-    contractors: (typeof carla)[];
+    lines: [string, number, number][]; // category, share of budget, share of that line committed
+    supervisor: User;
+    contractors: User[];
     reportDays: number;
     skipToday: boolean;
-    milestones: [string, number, number, MilestoneStatus, string?][]; // title, due offset (days from today), payment, status, note
+    work: Work[];
+    extra: [string, string, string, number, ExpenseStatus, User, string?][]; // line, vendor, description, dollars, status, submitter, note
   };
 
   const specs: Spec[] = [
@@ -105,13 +114,18 @@ async function main() {
       contractors: [carla, ruth],
       reportDays: 34,
       skipToday: false,
-      milestones: [
-        ["Site cleared and hoarded", -120, 60_000, "SIGNED_OFF"],
-        ["Foundations complete", -70, 220_000, "SIGNED_OFF"],
-        ["Ground and level 1 frame", -12, 180_000, "PASSED", "Frame checked against drawings. All columns within tolerance."],
-        ["Level 2 slab poured", 2, 150_000, "SUBMITTED", "Slab poured and cured. Cube test results attached."],
-        ["Level 3 and 4 frame", 45, 220_000, "OPEN"],
-        ["Roof watertight", 110, 160_000, "OPEN"],
+      work: [
+        { title: "Site cleared and hoarded", due: -120, value: 60_000, status: "VERIFIED", who: carla, line: "Site preparation", inv: { status: "PAID", paidShare: 1 } },
+        { title: "Foundations complete", due: -70, value: 220_000, status: "VERIFIED", who: carla, line: "Foundations", inv: { status: "PROCESSING", paidShare: 0.6, dueIn: 12 } },
+        { title: "Ground and level 1 frame", due: -12, value: 180_000, status: "AWAITING_OWNER", who: carla, line: "Structure", note: "Frame checked against drawings. All columns within tolerance.", inv: { status: "SUBMITTED", dueIn: 28 } },
+        { title: "Level 2 slab poured", due: 2, value: 150_000, status: "SUBMITTED", who: carla, line: "Structure", note: "Slab poured and cured. Cube test results attached." },
+        { title: "Electrical first fix, levels 1 and 2", due: -3, value: 9_500, status: "INSPECTED", who: ruth, line: "MEP", note: "All circuits tested. Certificates on site." },
+        { title: "Level 3 and 4 frame", due: 45, value: 220_000, status: "IN_PROGRESS", who: carla, line: "Structure" },
+        { title: "Roof watertight", due: 110, value: 160_000, status: "NOT_STARTED", who: null, line: "Roofing" },
+      ],
+      extra: [
+        ["Structure", "Texas Rebar Supply", "Rebar for level 3 slab", 8_400, "SUBMITTED", marcus],
+        ["MEP", "Alvarez Electrical", "Cable and switchgear supply", 23_750, "OWNER_REVIEW", ruth],
       ],
     },
     {
@@ -136,12 +150,17 @@ async function main() {
       contractors: [carla, ruth],
       reportDays: 30,
       skipToday: true,
-      milestones: [
-        ["Basement and foundations", -150, 260_000, "SIGNED_OFF"],
-        ["Structural frame", -60, 300_000, "SIGNED_OFF"],
-        ["Roof watertight", -20, 120_000, "REJECTED", "Flashing incomplete at the plant room upstand. Fix and resubmit."],
-        ["MEP second fix", 25, 200_000, "OPEN"],
-        ["Handover", 55, 180_000, "OPEN"],
+      work: [
+        { title: "Basement and foundations", due: -150, value: 260_000, status: "VERIFIED", who: carla, line: "Foundations", inv: { status: "PAID", paidShare: 1 } },
+        { title: "Structural frame", due: -60, value: 300_000, status: "VERIFIED", who: carla, line: "Structure", inv: { status: "APPROVED", dueIn: -6 } },
+        { title: "Roof watertight", due: -20, value: 120_000, status: "CORRECTIONS", who: carla, line: "Roofing", note: "Flashing incomplete at the plant room upstand. Fix and resubmit." },
+        { title: "Electrical containment", due: -8, value: 8_000, status: "VERIFIED", who: ruth, line: "MEP", inv: { status: "APPROVED", dueIn: 21 } },
+        { title: "MEP second fix", due: 25, value: 200_000, status: "IN_PROGRESS", who: ruth, line: "MEP" },
+        { title: "Handover", due: 55, value: 180_000, status: "NOT_STARTED", who: null, line: "Finishes" },
+      ],
+      extra: [
+        ["Finishes", "Brightwall Interiors", "Drywall materials, ground floor", 6_200, "SUBMITTED", carla],
+        ["Structure", "Gulf Ready-Mix", "Concrete, invoice 2231", 4_300, "PAYMENT_REJECTED", marcus, "Duplicate of invoice 2219, already paid."],
       ],
     },
     {
@@ -166,13 +185,18 @@ async function main() {
       contractors: [carla],
       reportDays: 18,
       skipToday: false,
-      milestones: [
-        ["Site cleared and services located", -5, 45_000, "SIGNED_OFF"],
-        ["Foundations for units 1 to 4", 40, 120_000, "OPEN"],
-        ["Units 1 to 4 framed", 110, 160_000, "OPEN"],
+      work: [
+        { title: "Site cleared and services located", due: -5, value: 45_000, status: "VERIFIED", who: carla, line: "Site preparation", inv: { status: "OWNER_REVIEW", dueIn: 27 } },
+        { title: "Foundations for units 1 to 4", due: 40, value: 120_000, status: "IN_PROGRESS", who: carla, line: "Foundations" },
+        { title: "Units 1 to 4 framed", due: 110, value: 160_000, status: "NOT_STARTED", who: carla, line: "Structure" },
       ],
+      extra: [],
     },
   ];
+
+  const VENDOR_OF = (u: User) => u.title ?? u.name;
+  const RANK: MilestoneStatus[] = ["NOT_STARTED", "IN_PROGRESS", "SUBMITTED", "INSPECTED", "AWAITING_OWNER", "VERIFIED"];
+  const reached = (st: MilestoneStatus, step: MilestoneStatus) => RANK.indexOf(st) >= RANK.indexOf(step);
 
   for (const [pi, s] of specs.entries()) {
     const startDate = daysAgo(s.start);
@@ -216,6 +240,10 @@ async function main() {
           progress,
           workDone: pick(WORK),
           issues: issue,
+          materials: pick(MATERIALS),
+          equipment: pick(EQUIPMENT),
+          incidents: rand() < 0.06 ? pick(INCIDENTS) : null,
+          remarks: pick(REMARKS),
           status,
           reviewNote: status === "RETURNED" ? "Please add photos of the east elevation." : null,
           createdAt: at(date, 16 + rand() * 2),
@@ -233,97 +261,143 @@ async function main() {
       if (status !== "SUBMITTED") await log(marcus.id, status === "ACCEPTED" ? "accepted a daily report" : "sent a daily report back", "DailyReport", report.id, at(date, 19));
     }
 
-    // Budget lines and invoices.
-    const VENDORS: Record<string, string[]> = {
-      "Site preparation": ["Lone Star Earthworks", "Clearline Demolition"],
-      Foundations: ["Mendes Structural Ltd", "Gulf Ready-Mix"],
-      Structure: ["Mendes Structural Ltd", "Texas Rebar Supply", "Gulf Ready-Mix"],
-      Roofing: ["Summit Roofing Co"],
-      MEP: ["Alvarez Electrical", "FlowRight Plumbing"],
-      Finishes: ["Brightwall Interiors"],
-      Contingency: ["Various"],
-    };
-    for (const [category, share, spentShare] of s.lines) {
-      const budgeted = $(s.budget * share);
-      const line = await db.budgetLine.create({ data: { projectId: project.id, category, budgeted } });
-      let remaining = Math.round(budgeted * spentShare);
-      const n = remaining > 0 ? 2 + Math.floor(rand() * 4) : 0;
-      for (let k = 0; k < n && remaining > 0; k++) {
-        const amount = k === n - 1 ? remaining : Math.round((remaining / (n - k)) * (0.7 + rand() * 0.6));
-        remaining -= amount;
-        const decided = daysAgo(Math.max(1, Math.round(s.start - ((k + 1) / (n + 1)) * (s.start - 2) * (0.4 + spentShare * 0.6))));
-        const vendor = pick(VENDORS[category] ?? ["Various"]);
-        const e = await db.expense.create({
-          data: {
-            budgetLineId: line.id,
-            submitterId: vendor.startsWith("Alvarez") ? ruth.id : vendor.startsWith("Mendes") ? carla.id : marcus.id,
-            vendor,
-            description: `${category}: ${pick(["materials", "labour", "plant hire", "progress claim"])}`,
-            amount,
-            status: "APPROVED",
-            createdAt: new Date(decided.getTime() - 2 * DAY),
-            decidedAt: decided,
-          },
-        });
-        await log(marcus.id, `approved $${(amount / 100).toLocaleString("en-US")} from ${vendor}`, "Expense", e.id, decided);
-      }
+    const lineIds: Record<string, string> = {};
+    const committed: Record<string, number> = {};
+    for (const [category, share] of s.lines) {
+      const line = await db.budgetLine.create({ data: { projectId: project.id, category, budgeted: $(s.budget * share) } });
+      lineIds[category] = line.id;
+      committed[category] = 0;
     }
+    const pay = (expenseId: string, amount: number, paidAt: Date, i: number) =>
+      db.payment.create({ data: { expenseId, amount, paidAt, reference: `ACH-${String(4100 + pi * 100 + i).padStart(5, "0")}`, recordedById: fiona.id } });
 
-    // Invoices waiting in the approval queues.
-    if (pi < 2) {
-      const lines = await db.budgetLine.findMany({ where: { projectId: project.id } });
-      const byCat = (c: string) => lines.find((l) => l.category === c)!;
-      const pending: [string, string, string, number, ExpenseStatus, string][] = [
-        ["Structure", "Texas Rebar Supply", "Rebar for level 3 slab", 8_400, "PENDING", carla.id],
-        ["MEP", "Alvarez Electrical", "Level 1 and 2 first fix", 23_750, "MANAGER_APPROVED", ruth.id],
-      ];
-      if (pi === 1) pending.push(["Finishes", "Brightwall Interiors", "Drywall materials, ground floor", 6_200, "PENDING", carla.id]);
-      for (const [cat, vendor, description, dollars, status, submitterId] of pending) {
-        const e = await db.expense.create({
-          data: { budgetLineId: byCat(cat).id, submitterId, vendor, description, amount: $(dollars), status, createdAt: daysAgo(1) },
-        });
-        await log(submitterId, `submitted a $${dollars.toLocaleString("en-US")} invoice for ${cat}`, "Expense", e.id, daysAgo(1));
-        if (status === "MANAGER_APPROVED") await log(marcus.id, `approved $${dollars.toLocaleString("en-US")} from ${vendor} and sent it to the owner`, "Expense", e.id, at(daysAgo(1), 5));
-      }
-    }
-
-    // Milestones with evidence.
-    for (const [i, [title, due, payment, status, note]] of s.milestones.entries()) {
-      const dueDate = new Date(today.getTime() + due * DAY);
-      const done = status !== "OPEN";
-      const submittedAt = done ? new Date(Math.min(dueDate.getTime(), today.getTime()) - 3 * DAY) : null;
+    // Work items, each with its verification history and invoice.
+    for (const [i, w] of s.work.entries()) {
+      const dueDate = new Date(today.getTime() + w.due * DAY);
+      const anchor = Math.min(dueDate.getTime(), today.getTime());
+      const submitted = reached(w.status, "SUBMITTED") || w.status === "CORRECTIONS";
+      const submittedAt = submitted ? new Date(anchor - 4 * DAY) : null;
+      const inspectedAt = reached(w.status, "INSPECTED") || w.status === "CORRECTIONS" ? new Date(anchor - 3 * DAY) : null;
+      const approvedAt = reached(w.status, "AWAITING_OWNER") ? new Date(anchor - 2 * DAY) : null;
+      const verifiedAt = w.status === "VERIFIED" ? new Date(anchor - DAY) : null;
       const m = await db.milestone.create({
         data: {
           projectId: project.id,
-          title,
+          title: w.title,
           dueDate,
-          paymentAmount: $(payment),
-          status,
+          paymentAmount: $(w.value),
+          status: w.status,
           sortOrder: i,
+          assigneeId: w.who?.id,
+          startedAt: w.status === "NOT_STARTED" ? null : new Date(anchor - 30 * DAY),
           submittedAt,
-          submittedNote: done ? (status === "SUBMITTED" ? note : "Work complete. Photos attached.") : null,
-          reviewNote: status === "PASSED" || status === "REJECTED" ? note : null,
-          passedAt: status === "PASSED" || status === "SIGNED_OFF" ? new Date(submittedAt!.getTime() + DAY) : null,
-          signedOffAt: status === "SIGNED_OFF" ? new Date(submittedAt!.getTime() + 2 * DAY) : null,
-          photos: done ? { create: [{ url: art(Math.max(5, s.progress + due / 4), s.floors, "Sunny"), caption: title, takenAt: submittedAt! }] } : undefined,
+          submittedNote: submitted ? (w.status === "SUBMITTED" || w.status === "INSPECTED" ? w.note : "Work complete. Photos attached.") : null,
+          inspectedAt,
+          inspectNote: w.status === "CORRECTIONS" ? w.note : inspectedAt ? "Inspected on site. Matches drawings." : null,
+          approvedAt,
+          reviewNote: w.status === "AWAITING_OWNER" ? w.note : null,
+          verifiedAt,
+          photos: submitted ? { create: [{ url: art(Math.max(5, s.progress + w.due / 4), s.floors, "Sunny"), caption: w.title, takenAt: submittedAt! }] } : undefined,
         },
       });
-      if (submittedAt) await log(carla.id, `submitted milestone "${title}"`, "Milestone", m.id, submittedAt);
-      if (status === "PASSED" || status === "SIGNED_OFF") await log(marcus.id, `passed inspection on milestone "${title}"`, "Milestone", m.id, new Date(submittedAt!.getTime() + DAY), note);
-      if (status === "SIGNED_OFF") await log(olivia.id, `signed off milestone "${title}"`, "Milestone", m.id, new Date(submittedAt!.getTime() + 2 * DAY));
-      if (status === "REJECTED") await log(olivia.id, `rejected milestone "${title}"`, "Milestone", m.id, new Date(submittedAt!.getTime() + DAY), note);
+      const who = w.who ?? carla;
+      if (submittedAt) await log(who.id, `submitted work on "${w.title}"`, "Milestone", m.id, submittedAt);
+      if (inspectedAt) await log(s.supervisor.id, w.status === "CORRECTIONS" ? `asked for corrections on "${w.title}"` : `passed inspection on "${w.title}"`, "Milestone", m.id, inspectedAt, w.status === "CORRECTIONS" ? w.note : undefined);
+      if (approvedAt) await log(marcus.id, `approved work on "${w.title}"`, "Milestone", m.id, approvedAt);
+      if (verifiedAt && $(w.value) > company.approvalThreshold) await log(olivia.id, `gave final approval on "${w.title}"`, "Milestone", m.id, verifiedAt);
+
+      if (w.inv && w.who) {
+        const amount = $(w.value);
+        const retention = Math.round(amount * 0.05);
+        const createdAt = new Date((verifiedAt ?? new Date(anchor)).getTime() + DAY);
+        const created = createdAt > today ? at(daysAgo(1), 10) : createdAt;
+        const e = await db.expense.create({
+          data: {
+            budgetLineId: lineIds[w.line],
+            milestoneId: m.id,
+            submitterId: w.who.id,
+            vendor: VENDOR_OF(w.who),
+            description: `Progress claim: ${w.title}`,
+            amount,
+            retention,
+            status: w.inv.status,
+            createdAt: created,
+            dueDate: new Date(today.getTime() + (w.inv.dueIn ?? -20) * DAY),
+            decidedAt: ["APPROVED", "PROCESSING", "PAID"].includes(w.inv.status) ? new Date(created.getTime() + DAY) : null,
+          },
+        });
+        if (["APPROVED", "PROCESSING", "PAID"].includes(w.inv.status)) committed[w.line] += amount;
+        await log(w.who.id, `submitted a $${w.value.toLocaleString("en-US")} invoice for "${w.title}"`, "Expense", e.id, created);
+        if (w.inv.paidShare) {
+          const paid = Math.round((amount - retention) * w.inv.paidShare);
+          await pay(e.id, paid, new Date(created.getTime() + 12 * DAY), i);
+          await log(fiona.id, `paid $${(paid / 100).toLocaleString("en-US")} to ${VENDOR_OF(w.who)}`, "Expense", e.id, new Date(created.getTime() + 12 * DAY));
+        }
+      }
+    }
+
+    // Invoices not tied to work: materials, plant hire, and some waiting in the queues.
+    for (const [cat, vendor, description, dollars, status, by, note] of s.extra) {
+      const e = await db.expense.create({
+        data: { budgetLineId: lineIds[cat], submitterId: by.id, vendor, description, amount: $(dollars), status, reviewNote: note, createdAt: daysAgo(2), dueDate: new Date(today.getTime() + 28 * DAY) },
+      });
+      await log(by.id, `submitted a $${dollars.toLocaleString("en-US")} invoice for ${cat}`, "Expense", e.id, daysAgo(2));
+      if (status === "OWNER_REVIEW") await log(marcus.id, `approved $${dollars.toLocaleString("en-US")} from ${vendor} and sent it to the owner`, "Expense", e.id, at(daysAgo(1), 5));
+      if (status === "PAYMENT_REJECTED") await log(fiona.id, `refused payment of $${dollars.toLocaleString("en-US")} to ${vendor}`, "Expense", e.id, at(daysAgo(1), 3), note);
+    }
+
+    // History: earlier spend filling each line to its committed share, mostly paid.
+    const VENDORS: Record<string, string[]> = {
+      "Site preparation": ["Lone Star Earthworks", "Clearline Demolition"],
+      Foundations: ["Gulf Ready-Mix", "Texas Rebar Supply"],
+      Structure: ["Texas Rebar Supply", "Gulf Ready-Mix", "Lone Star Steel"],
+      Roofing: ["Summit Roofing Co"],
+      MEP: ["FlowRight Plumbing", "Coastal HVAC"],
+      Finishes: ["Brightwall Interiors"],
+      Contingency: ["Various"],
+    };
+    let n = 0;
+    for (const [category, share, spentShare] of s.lines) {
+      let remaining = Math.max(0, Math.round($(s.budget * share) * spentShare) - committed[category]);
+      const count = remaining > 0 ? 2 + Math.floor(rand() * 3) : 0;
+      for (let k = 0; k < count && remaining > 0; k++) {
+        const amount = k === count - 1 ? remaining : Math.round((remaining / (count - k)) * (0.7 + rand() * 0.6));
+        remaining -= amount;
+        const decided = daysAgo(Math.max(3, Math.round(s.start - ((k + 1) / (count + 1)) * (s.start - 2) * (0.4 + spentShare * 0.6))));
+        const vendor = pick(VENDORS[category] ?? ["Various"]);
+        const paidAt = new Date(decided.getTime() + 14 * DAY);
+        const isPaid = paidAt < today;
+        const e = await db.expense.create({
+          data: {
+            budgetLineId: lineIds[category],
+            submitterId: marcus.id,
+            vendor,
+            description: `${category}: ${pick(["materials", "plant hire", "deliveries", "testing"])}`,
+            amount,
+            status: isPaid ? "PAID" : "APPROVED",
+            createdAt: new Date(decided.getTime() - 2 * DAY),
+            decidedAt: decided,
+            dueDate: new Date(decided.getTime() + 28 * DAY),
+          },
+        });
+        await log(marcus.id, `approved $${(amount / 100).toLocaleString("en-US")} from ${vendor}`, "Expense", e.id, decided);
+        if (isPaid) await pay(e.id, amount, paidAt, 50 + n++);
+      }
     }
   }
 
   // A few notifications so the bell isn't empty on first visit.
   const notes: [string, string, string, string][] = [
-    [olivia.id, "Ready for sign-off: Ground and level 1 frame", "Marcus Reid passed inspection. Signing off releases $180,000.", "Harbour View Residences"],
-    [olivia.id, "Approval needed: $23,750", "This invoice is over your $10,000 limit. Marcus Reid has approved it.", "Harbour View Residences"],
+    [olivia.id, "Final approval needed: Ground and level 1 frame", "Marcus Reid approved $180,000 of work, over your limit.", "Harbour View Residences"],
+    [olivia.id, "Invoice approval needed: $23,750", "This invoice is over your $10,000 limit. Marcus Reid has approved it.", "Harbour View Residences"],
     [olivia.id, "Over budget: Structure", "Riverside Medical Centre: Structure is at 106% of its budget.", "Riverside Medical Centre"],
-    [marcus.id, "Ready for inspection: Level 2 slab poured", "Carla Mendes marked this milestone done.", "Harbour View Residences"],
+    [marcus.id, "Ready for your review: Electrical first fix, levels 1 and 2", "Sam Okafor inspected and passed the work.", "Harbour View Residences"],
     [marcus.id, "No daily report: Riverside Medical Centre", "Nobody has filed today's site report yet.", "Riverside Medical Centre"],
-    [carla.id, "Milestone rejected: Roof watertight", "Flashing incomplete at the plant room upstand. Fix and resubmit.", "Riverside Medical Centre"],
-    [sam.id, "Daily report accepted", "Marcus Reid accepted your report.", "Harbour View Residences"],
+    [sam.id, "Inspection requested: Level 2 slab poured", "Carla Mendes submitted work with photos.", "Harbour View Residences"],
+    [carla.id, "Corrections needed: Roof watertight", "Flashing incomplete at the plant room upstand. Fix and resubmit.", "Riverside Medical Centre"],
+    [carla.id, "Payment received: $125,400", "Mendes Structural Ltd, ref ACH-04101. Balance remaining: $83,600.", "Harbour View Residences"],
+    [fiona.id, "Overdue: $300,000 to Mendes Structural Ltd", "Riverside Medical Centre. This invoice was due 6 days ago.", "Riverside Medical Centre"],
+    [fiona.id, "Ready to pay: $8,000", "Alvarez Electrical on Riverside Medical Centre is approved for payment.", "Riverside Medical Centre"],
   ];
   for (const [userId, title, body, projectName] of notes) {
     const p = await db.project.findFirstOrThrow({ where: { name: projectName, companyId: company.id } });

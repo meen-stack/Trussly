@@ -10,7 +10,7 @@ const line = (budgeted: number, expenses: [number, string][]) => ({
 
 describe("summarizeLine", () => {
   it("counts only approved spend and tracks pending separately", () => {
-    const s = summarizeLine(line(1000, [[300, "APPROVED"], [200, "PENDING"], [100, "MANAGER_APPROVED"], [999, "REJECTED"]]));
+    const s = summarizeLine(line(1000, [[300, "APPROVED"], [200, "SUBMITTED"], [100, "OWNER_REVIEW"], [999, "REJECTED"]]));
     expect(s.spent).toBe(300);
     expect(s.pending).toBe(300);
     expect(s.state).toBe("ok");

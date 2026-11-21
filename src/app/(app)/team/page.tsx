@@ -52,7 +52,7 @@ export default async function CompanyTeamPage() {
                 </Field>
                 <Field label="Role">
                   <Select name="role" defaultValue="SUPERVISOR">
-                    {(["MANAGER", "SUPERVISOR", "CONTRACTOR", "OWNER", "ADMIN"] as const).map((r) => (
+                    {(["MANAGER", "SUPERVISOR", "CONTRACTOR", "FINANCE", "OWNER", "ADMIN"] as const).map((r) => (
                       <option key={r} value={r}>
                         {ROLE_LABEL[r]}
                       </option>

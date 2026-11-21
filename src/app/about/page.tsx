@@ -14,13 +14,13 @@ const FEATURES = [
   },
   {
     Icon: BadgeCheck,
-    title: "Milestone sign-off",
-    body: "Contractors submit evidence, the manager inspects, the owner signs off. Payment is released only when all three agree.",
+    title: "Verified before paid",
+    body: "Contractors submit work with photos, the supervisor inspects, the manager approves, the owner signs off big items. Only verified work can be invoiced.",
   },
   {
     Icon: Wallet,
-    title: "Budget against actual",
-    body: "Every invoice is approved against a budget line. Lines turn amber at 90% and red past 100%, and big invoices go to the owner.",
+    title: "Invoices and payments",
+    body: "Invoices are approved against budget lines, then the accountant records full or partial payments. Overdue bills and retention are tracked for you.",
   },
   {
     Icon: LineChart,
@@ -42,7 +42,7 @@ const FEATURES = [
 const STEPS = [
   ["Set up the project", "Budget lines, milestones tied to payments and the team, each with their own role."],
   ["Site reports daily", "The supervisor's report and photos land in the manager's queue the same afternoon."],
-  ["Approve with evidence", "Invoices and milestones move through review with notes and photos attached."],
+  ["Verify, then pay", "Work is inspected and approved first. Invoices follow, and finance pays them."],
   ["Watch the numbers", "The dashboard flags projects that are behind plan or heading over budget."],
 ];
 

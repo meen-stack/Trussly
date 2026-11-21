@@ -7,7 +7,7 @@ import { cn } from "./ui";
 const TABS = [
   ["", "Overview"],
   ["/reports", "Daily reports"],
-  ["/milestones", "Milestones"],
+  ["/milestones", "Work"],
   ["/budget", "Budget & spend"],
   ["/photos", "Photos"],
   ["/team", "Team"],

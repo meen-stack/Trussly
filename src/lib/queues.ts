@@ -7,21 +7,26 @@ import { visibleProjectsWhere } from "./access";
 /** Work waiting on this user, by role. Shared by the nav badge, dashboard and approvals page. */
 export function approvalWhere(user: CurrentUser) {
   const project = visibleProjectsWhere(user);
-  const reports: Prisma.DailyReportWhereInput | null =
-    user.role === "MANAGER" ? { status: "SUBMITTED", project } : null;
-  const milestones: Prisma.MilestoneWhereInput | null =
-    user.role === "MANAGER"
+  const reports: Prisma.DailyReportWhereInput | null = user.role === "MANAGER" ? { status: "SUBMITTED", project } : null;
+  const work: Prisma.MilestoneWhereInput | null =
+    user.role === "SUPERVISOR"
       ? { status: "SUBMITTED", project }
-      : user.role === "OWNER"
-        ? { status: "PASSED", project }
-        : null;
+      : user.role === "MANAGER"
+        ? { status: "INSPECTED", project }
+        : user.role === "OWNER"
+          ? { status: "AWAITING_OWNER", project }
+          : user.role === "CONTRACTOR"
+            ? { status: "CORRECTIONS", assigneeId: user.id, project }
+            : null;
   const expenses: Prisma.ExpenseWhereInput | null =
     user.role === "MANAGER"
-      ? { status: "PENDING", budgetLine: { project } }
+      ? { status: "SUBMITTED", budgetLine: { project } }
       : user.role === "OWNER"
-        ? { status: "MANAGER_APPROVED", budgetLine: { project } }
-        : null;
-  return { reports, milestones, expenses };
+        ? { status: "OWNER_REVIEW", budgetLine: { project } }
+        : user.role === "FINANCE" || user.role === "ADMIN"
+          ? { status: { in: ["APPROVED", "PROCESSING"] }, budgetLine: { project } }
+          : null;
+  return { reports, milestones: work, expenses };
 }
 
 export async function approvalCount(user: CurrentUser) {

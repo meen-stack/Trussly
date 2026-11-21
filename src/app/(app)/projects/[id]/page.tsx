@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { health, loadProjectSummary } from "@/lib/project-data";
 import { formatMoney } from "@/lib/money";
 import { Badge, Card, CardHeader, EmptyState, Stat } from "@/components/ui";
-import { StatusBadge } from "@/components/status";
+import { WorkBadge } from "@/components/status";
 import { BudgetChart, ProgressChart, SpendChart } from "@/components/charts";
 
 export default async function ProjectOverview({ params }: PageProps<"/projects/[id]">) {
@@ -22,7 +22,7 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
     orderBy: { takenAt: "desc" },
     take: 6,
   });
-  const nextMilestone = s.project.milestones.find((m) => m.status !== "SIGNED_OFF");
+  const nextMilestone = s.project.milestones.find((m) => m.status !== "VERIFIED" && m.status !== "REJECTED");
   const reportedToday = s.latestReportDate && format(s.latestReportDate, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
 
   return (
@@ -78,19 +78,19 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
         </Card>
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Milestones" subtitle={`${s.signedOff} of ${s.project.milestones.length} signed off`} />
+            <CardHeader title="Work" subtitle={`${s.signedOff} of ${s.project.milestones.length} verified`} />
             <div className="p-5 text-sm">
               {nextMilestone ? (
                 <>
                   <p className="text-muted">Next up</p>
                   <p className="mt-1 font-semibold">{nextMilestone.title}</p>
                   <div className="mt-2 flex items-center gap-2">
-                    <StatusBadge status={nextMilestone.status} />
+                    <WorkBadge status={nextMilestone.status} />
                     <span className="text-muted">due {format(nextMilestone.dueDate, "MMM d")}</span>
                   </div>
                 </>
               ) : (
-                <p className="text-muted">All milestones signed off.</p>
+                <p className="text-muted">All work verified.</p>
               )}
               {s.overdue.length > 0 && (
                 <p className="mt-4 flex items-center gap-2 text-bad">
@@ -98,7 +98,7 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
                 </p>
               )}
               <Link href={`/projects/${id}/milestones`} className="mt-4 inline-block text-brand-text hover:underline">
-                All milestones
+                All work
               </Link>
             </div>
           </Card>

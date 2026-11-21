@@ -1,14 +1,16 @@
-# BuildTrace
+<p align="center"><img src="public/brand/trussly-logo.png" alt="Trussly" width="160"></p>
 
-**Remote construction monitoring for property developers and investors.**
+# Trussly
 
-BuildTrace lets the people paying for a building see how it's really going without being on site. Supervisors file daily reports with geotagged photos, contractors submit evidence for milestones, managers inspect and approve, and owners sign off before money moves. Every invoice is tracked against a budget line, so overruns show up while they're still small.
+**Plan • Build • Manage.** Remote construction monitoring for property developers and investors.
 
-![BuildTrace landing page](docs/screenshots/landing.png)
+Trussly lets the people paying for a building see how it's really going without being on site. Supervisors file daily reports with geotagged photos, contractors submit evidence for milestones, managers inspect and approve, and owners sign off before money moves. Every invoice is tracked against a budget line, so overruns show up while they're still small.
+
+![Trussly landing page](docs/screenshots/landing.png)
 
 ## Why
 
-85% of construction projects go over budget, by 28% on average ([source](https://www.propelleraero.com/blog/10-construction-project-cost-overrun-statistics-you-need-to-hear/)). Owners usually find out from a monthly report, long after the money is spent. BuildTrace shortens that loop to one day.
+85% of construction projects go over budget, by 28% on average ([source](https://www.propelleraero.com/blog/10-construction-project-cost-overrun-statistics-you-need-to-hear/)). Owners usually find out from a monthly report, long after the money is spent. Trussly shortens that loop to one day.
 
 ## Try the demo
 
@@ -21,7 +23,7 @@ Run it locally (below), then pick a role on the landing page. The seeded company
 | Site supervisor | Sam | File a daily report from a phone with photos |
 | Contractor | Carla | Mark a milestone done with photo evidence, submit an invoice |
 
-All demo accounts use the password `buildtrace-demo`.
+All demo accounts use the password `trussly-demo`.
 
 ## Features
 

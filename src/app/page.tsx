@@ -54,7 +54,7 @@ export default async function Landing() {
       <section className="blueprint relative overflow-hidden bg-steel text-white">
         <div className="absolute -top-40 right-0 h-[28rem] w-[28rem] rounded-full bg-brand/25 blur-3xl" />
         <header className="relative mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-          <Logo dark />
+          <Logo tagline />
           <nav className="flex items-center gap-2 text-sm">
             <Link href="/login" className="rounded-lg px-3 py-2 text-white/80 hover:text-white">
               Log in
@@ -67,13 +67,13 @@ export default async function Landing() {
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pt-10 pb-20 sm:px-6 lg:grid-cols-2 lg:pt-16 lg:pb-28">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Remote construction monitoring
+              <span className="h-1.5 w-1.5 rounded-full bg-brand" /> Plan • Build • Manage
             </p>
             <h1 className="font-display mt-5 text-4xl leading-[1.05] font-semibold sm:text-5xl lg:text-6xl">
               See your site <span className="text-brand">every day</span>, from anywhere.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-white/70">
-              BuildTrace gives developers and investors daily site reports, photo evidence, milestone sign-off and budget against actual spend,
+              Trussly gives developers and investors daily site reports, photo evidence, milestone sign-off and budget against actual spend,
               so overruns get caught while they&apos;re still small.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -94,7 +94,7 @@ export default async function Landing() {
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 md:grid-cols-3">
           <Fact value="85%" label="of construction projects go over budget" />
           <Fact value="28%" label="average cost overrun on those projects" />
-          <Fact value="1 day" label="is how stale your information is with BuildTrace, not 1 month" />
+          <Fact value="1 day" label="is how stale your information is with Trussly, not 1 month" />
         </div>
         <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-muted sm:px-6">
           Overrun figures: study of projects across 20 countries over 70 years, via{" "}
@@ -127,7 +127,7 @@ export default async function Landing() {
           <ol className="mt-10 grid gap-6 md:grid-cols-4">
             {STEPS.map(([title, body], i) => (
               <li key={title}>
-                <span className="font-display flex h-10 w-10 items-center justify-center rounded-full bg-steel font-semibold text-white">{i + 1}</span>
+                <span className="font-display flex h-10 w-10 items-center justify-center rounded-full bg-brand font-bold text-brand-ink">{i + 1}</span>
                 <h3 className="mt-4 font-semibold">{title}</h3>
                 <p className="mt-1 text-sm text-muted">{body}</p>
               </li>
@@ -159,7 +159,7 @@ export default async function Landing() {
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <Logo />
+          <Logo tagline />
           <p>Built by meen-stack · A portfolio project</p>
         </div>
       </footer>
@@ -186,7 +186,7 @@ function HeroPreview() {
   ] as const;
   return (
     <div className="relative">
-      <div className="rounded-2xl border border-white/10 bg-white p-5 text-ink shadow-2xl shadow-black/40">
+      <div className="rounded-2xl border border-white/10 bg-surface p-5 text-ink shadow-2xl shadow-black/60">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-muted">Austin, TX</p>
@@ -220,11 +220,11 @@ function HeroPreview() {
           ))}
         </div>
       </div>
-      <div className="absolute -bottom-6 -left-4 hidden w-60 rounded-xl border border-line bg-white p-3 text-ink shadow-xl sm:block">
+      <div className="absolute -bottom-6 -left-4 hidden w-60 rounded-xl border border-line bg-surface p-3 text-ink shadow-xl shadow-black/60 sm:block">
         <p className="text-xs font-semibold">Ready for sign-off</p>
         <p className="mt-0.5 text-xs text-muted">Ground and level 1 frame · $180,000</p>
         <div className="mt-2 flex gap-1.5">
-          <span className="rounded-md bg-ok px-2 py-1 text-[11px] font-medium text-white">Sign off</span>
+          <span className="rounded-md bg-brand px-2 py-1 text-[11px] font-semibold text-brand-ink">Sign off</span>
           <span className="rounded-md border border-line px-2 py-1 text-[11px]">View photos</span>
         </div>
       </div>

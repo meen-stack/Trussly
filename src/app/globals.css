@@ -1,18 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f6f5f2;
-  --surface: #ffffff;
-  --ink: #16181d;
-  --muted: #5d6470;
-  --line: #e4e2dc;
-  --brand: #e8590c;
-  --brand-ink: #ffffff;
-  --brand-soft: #fff1e8;
-  --steel: #1f2a37;
-  --ok: #2f9e44;
-  --warn: #e67700;
-  --bad: #c92a2a;
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --surface: #141416;
+  --ink: #f5f5f5;
+  --muted: #a1a1aa;
+  --line: #27272a;
+  --brand: #ffc107;
+  --brand-ink: #111111;
+  --brand-soft: rgba(255, 193, 7, 0.12);
+  --steel: #000000;
+  --ok: #22c55e;
+  --warn: #fb923c;
+  --bad: #f87171;
 }
 
 @theme inline {
@@ -29,7 +30,7 @@
   --color-warn: var(--warn);
   --color-bad: var(--bad);
   --font-sans: var(--font-inter);
-  --font-display: var(--font-grotesk);
+  --font-display: var(--font-montserrat);
 }
 
 body {
@@ -38,14 +39,15 @@ body {
 }
 
 .font-display {
-  font-family: var(--font-grotesk), var(--font-inter), sans-serif;
+  font-family: var(--font-montserrat), var(--font-inter), sans-serif;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-/* Subtle blueprint grid used on the landing page */
+/* Subtle blueprint grid used on dark hero sections */
 .blueprint {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    linear-gradient(rgba(255, 193, 7, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 193, 7, 0.05) 1px, transparent 1px);
   background-size: 32px 32px;
 }

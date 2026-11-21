@@ -43,14 +43,15 @@ const WEATHER = ["Sunny", "Sunny", "Cloudy", "Sunny", "Light rain", "Hot", "Clou
 
 async function main() {
   // On deploys we only seed once, so visitors' changes aren't wiped by every build.
-  if (process.argv.includes("--if-missing") && (await db.company.findFirst({ where: { name: "Northline Developments" } }))) {
+  // Checking the owner's email (not just the company) means a rename of the demo accounts reseeds once.
+  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: DEMO_EMAILS.OWNER } }))) {
     console.log("Demo company already exists, skipping seed.");
     return;
   }
   // Projects first: deleting them cascades reports and invoices, which reference users.
   await db.project.deleteMany({ where: { company: { name: "Northline Developments" } } });
   await db.company.deleteMany({ where: { name: "Northline Developments" } });
-  await db.user.deleteMany({ where: { email: { endsWith: "@demo.buildtrace.app" } } });
+  await db.user.deleteMany({ where: { email: { endsWith: "@demo.trussly.app" } } });
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const company = await db.company.create({ data: { name: "Northline Developments", currency: "USD", approvalThreshold: $(10000) } });
@@ -61,8 +62,8 @@ async function main() {
   const marcus = await mk("Marcus Reid", "MANAGER", DEMO_EMAILS.MANAGER, "Senior Project Manager");
   const sam = await mk("Sam Okafor", "SUPERVISOR", DEMO_EMAILS.SUPERVISOR, "Site Supervisor");
   const carla = await mk("Carla Mendes", "CONTRACTOR", DEMO_EMAILS.CONTRACTOR, "Mendes Structural Ltd");
-  const dev = await mk("Dev Patel", "SUPERVISOR", "dev@demo.buildtrace.app", "Site Supervisor");
-  const ruth = await mk("Ruth Alvarez", "CONTRACTOR", "ruth@demo.buildtrace.app", "Alvarez Electrical");
+  const dev = await mk("Dev Patel", "SUPERVISOR", "dev@demo.trussly.app", "Site Supervisor");
+  const ruth = await mk("Ruth Alvarez", "CONTRACTOR", "ruth@demo.trussly.app", "Alvarez Electrical");
 
   type Spec = {
     name: string;

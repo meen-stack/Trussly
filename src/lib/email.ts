@@ -10,7 +10,7 @@ export async function sendEmail(to: string, subject: string, text: string) {
     return;
   }
   try {
-    await resend.emails.send({ from: process.env.EMAIL_FROM ?? "BuildTrace <onboarding@resend.dev>", to, subject, text });
+    await resend.emails.send({ from: process.env.EMAIL_FROM ?? "Trussly <onboarding@resend.dev>", to, subject, text });
   } catch (err) {
     console.error("[email] send failed", err);
   }

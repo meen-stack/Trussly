@@ -61,7 +61,7 @@ export async function forgotPassword(_: FormState, form: FormData): Promise<Form
     await db.passwordReset.create({ data: { token, userId: user.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
     await sendEmail(
       user.email,
-      "Reset your BuildTrace password",
+      "Reset your Trussly password",
       `Someone asked to reset your password. This link works for one hour:\n\n${appUrl(`/reset-password/${token}`)}\n\nIf it wasn't you, ignore this email.`,
     );
   }
@@ -95,7 +95,7 @@ export async function inviteUser(_: FormState, form: FormData): Promise<FormStat
     data: { email: parsed.data.email, role: parsed.data.role as Role, token, companyId: me.companyId, expiresAt: new Date(Date.now() + 7 * 864e5) },
   });
   const link = appUrl(`/invite/${token}`);
-  await sendEmail(parsed.data.email, `${me.name} invited you to ${me.company.name} on BuildTrace`, `Join the team here (valid for 7 days):\n\n${link}`);
+  await sendEmail(parsed.data.email, `${me.name} invited you to ${me.company.name} on Trussly`, `Join the team here (valid for 7 days):\n\n${link}`);
   return { success: `Invite sent. You can also share this link: ${link}` };
 }
 

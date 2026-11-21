@@ -26,7 +26,7 @@ export default function LoginPage() {
         </div>
       </ActionForm>
       <p className="mt-6 text-center text-sm text-muted">
-        New to BuildTrace?{" "}
+        New to Trussly?{" "}
         <Link href="/signup" className="font-medium text-brand hover:underline">
           Create an account
         </Link>

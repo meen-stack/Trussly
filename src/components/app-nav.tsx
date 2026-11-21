@@ -32,7 +32,7 @@ export function AppNav({ counts, mobile = false }: { counts: { approvals: number
           >
             <Icon className="h-4 w-4 shrink-0" />
             <span className={mobile ? "" : "flex-1"}>{label}</span>
-            {count > 0 && <span className="rounded-full bg-brand px-1.5 text-xs text-white">{count}</span>}
+            {count > 0 && <span className="rounded-full bg-brand px-1.5 text-xs font-semibold text-brand-ink">{count}</span>}
           </Link>
         );
       })}

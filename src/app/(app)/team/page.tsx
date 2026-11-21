@@ -24,7 +24,7 @@ export default async function CompanyTeamPage() {
           <ul className="divide-y divide-line">
             {people.map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-5 py-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-steel text-sm font-semibold text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand">
                   {p.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}
                 </div>
                 <div className="min-w-0 flex-1">

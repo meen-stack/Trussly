@@ -51,7 +51,7 @@ export function ReportForm({
           max={100}
           value={progress}
           onChange={(e) => setProgress(Number(e.target.value))}
-          className="w-full accent-[#e8590c]"
+          className="w-full accent-[#ffc107]"
         />
       </Field>
       <Field label="Work done today">

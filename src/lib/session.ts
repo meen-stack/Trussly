@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 
-export const SESSION_COOKIE = "bt_session";
+export const SESSION_COOKIE = "trussly_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 export type SessionPayload = { userId: string; companyId: string; role: string };

@@ -7,12 +7,12 @@ export function cn(...args: Parameters<typeof clsx>) {
 }
 
 const buttonStyles = {
-  primary: "bg-brand text-brand-ink hover:bg-[#d9480f] shadow-sm",
+  primary: "bg-brand text-brand-ink hover:bg-[#ffb300] shadow-sm",
   secondary: "bg-surface text-ink border border-line hover:bg-bg",
-  dark: "bg-steel text-white hover:bg-black",
+  dark: "bg-white/10 text-white border border-white/10 hover:bg-white/15",
   ghost: "text-muted hover:text-ink hover:bg-bg",
   danger: "bg-surface text-bad border border-bad/30 hover:bg-bad/5",
-  success: "bg-ok text-white hover:bg-[#2b8a3e]",
+  success: "bg-ok text-black hover:bg-[#16a34a]",
 };
 
 type Variant = keyof typeof buttonStyles;
@@ -54,7 +54,7 @@ const badgeTones = {
   ok: "bg-ok/10 text-ok border-ok/20",
   warn: "bg-warn/10 text-warn border-warn/20",
   bad: "bg-bad/10 text-bad border-bad/20",
-  steel: "bg-steel text-white border-steel",
+  steel: "bg-white/10 text-white border-white/20",
 };
 
 export type Tone = keyof typeof badgeTones;

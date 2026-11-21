@@ -17,7 +17,7 @@ export function ProjectCard({ s, currency }: { s: ProjectSummary; currency: stri
           ) : (
             <div className="blueprint h-full w-full" />
           )}
-          <div className="absolute top-3 right-3">
+          <div className="absolute top-3 right-3 rounded-full bg-black/80 backdrop-blur">
             <Badge tone={h.tone}>{h.label}</Badge>
           </div>
         </div>

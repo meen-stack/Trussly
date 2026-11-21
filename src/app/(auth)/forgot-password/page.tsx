@@ -17,7 +17,7 @@ export default function ForgotPage() {
         </Field>
       </ActionForm>
       <p className="mt-6 text-center text-sm">
-        <Link href="/login" className="text-brand hover:underline">
+        <Link href="/login" className="text-brand-text hover:underline">
           Back to log in
         </Link>
       </p>

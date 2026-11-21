@@ -38,7 +38,7 @@ export default async function PhotosPage({ params }: PageProps<"/projects/[id]/p
                 </a>
                 <figcaption className="truncate px-2 py-1.5 text-xs text-muted">
                   {p.report ? (
-                    <Link href={`/projects/${project.id}/reports/${p.report.id}`} className="hover:text-brand">Daily report</Link>
+                    <Link href={`/projects/${project.id}/reports/${p.report.id}`} className="hover:text-brand-text">Daily report</Link>
                   ) : (
                     <>Milestone: {p.milestone?.title}</>
                   )}

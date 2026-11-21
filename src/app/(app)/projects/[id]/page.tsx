@@ -71,7 +71,7 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Budget vs actual by line" action={<Link href={`/projects/${id}/budget`} className="text-sm text-brand hover:underline">Details</Link>} />
+          <CardHeader title="Budget vs actual by line" action={<Link href={`/projects/${id}/budget`} className="text-sm text-brand-text hover:underline">Details</Link>} />
           <div className="p-4">
             <BudgetChart currency={currency} data={s.budget.lines.map((l) => ({ category: l.category, budgeted: l.budgeted / 100, spent: l.spent / 100 }))} />
           </div>
@@ -97,13 +97,13 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
                   <AlertTriangle className="h-4 w-4" /> {s.overdue.length} overdue
                 </p>
               )}
-              <Link href={`/projects/${id}/milestones`} className="mt-4 inline-block text-brand hover:underline">
+              <Link href={`/projects/${id}/milestones`} className="mt-4 inline-block text-brand-text hover:underline">
                 All milestones
               </Link>
             </div>
           </Card>
           <Card>
-            <CardHeader title="Latest photos" action={<Link href={`/projects/${id}/photos`} className="text-sm text-brand hover:underline">All</Link>} />
+            <CardHeader title="Latest photos" action={<Link href={`/projects/${id}/photos`} className="text-sm text-brand-text hover:underline">All</Link>} />
             {photos.length ? (
               <div className="grid grid-cols-3 gap-1 p-2">
                 {photos.map((p) => (

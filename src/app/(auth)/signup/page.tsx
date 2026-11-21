@@ -27,7 +27,7 @@ export default function SignupPage() {
       </ActionForm>
       <p className="mt-6 text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-brand hover:underline">
+        <Link href="/login" className="font-medium text-brand-text hover:underline">
           Log in
         </Link>
       </p>

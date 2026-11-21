@@ -25,7 +25,7 @@ export default async function TeamPage({ params }: PageProps<"/projects/[id]/tea
         <ul className="divide-y divide-line">
           {members.map((m) => (
             <li key={m.id} className="flex items-center gap-3 px-5 py-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-text">
                 {m.user.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
               </div>
               <div className="min-w-0 flex-1">

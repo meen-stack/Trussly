@@ -49,7 +49,7 @@ export async function signup(_: FormState, form: FormData): Promise<FormState> {
 
 export async function logout() {
   await endSession();
-  redirect("/login");
+  redirect("/");
 }
 
 export async function forgotPassword(_: FormState, form: FormData): Promise<FormState> {

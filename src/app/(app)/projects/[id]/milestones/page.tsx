@@ -63,7 +63,7 @@ export default async function MilestonesPage({ params }: PageProps<"/projects/[i
               <ol className="mt-4 grid grid-cols-3 gap-2 text-xs">
                 {["Contractor submits", "Manager inspects", "Owner signs off"].map((label, step) => (
                   <li key={label} className="flex items-center gap-2">
-                    <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border", step <= reached ? "border-ok bg-ok text-black" : "border-line text-muted")}>
+                    <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border", step <= reached ? "border-ok bg-ok text-white" : "border-line text-muted")}>
                       {step <= reached ? <Check className="h-3 w-3" /> : step + 1}
                     </span>
                     <span className={step <= reached ? "font-medium" : "text-muted"}>{label}</span>

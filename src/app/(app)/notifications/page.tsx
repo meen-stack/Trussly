@@ -39,7 +39,7 @@ export default async function NotificationsPage() {
                   <div className="mt-1 flex gap-3 text-xs text-muted">
                     <span>{formatDistanceToNow(n.createdAt, { addSuffix: true })}</span>
                     {n.href && (
-                      <Link href={n.href} className="text-brand hover:underline">
+                      <Link href={n.href} className="text-brand-text hover:underline">
                         Open
                       </Link>
                     )}

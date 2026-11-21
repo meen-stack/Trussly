@@ -4,7 +4,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="flex flex-col px-6 py-8 sm:px-12">
-        <Logo tagline />
+        <Logo tagline href="/" />
         <div className="flex flex-1 items-center">
           <div className="mx-auto w-full max-w-sm py-10">{children}</div>
         </div>
@@ -12,7 +12,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       <div className="blueprint relative hidden flex-col justify-end overflow-hidden border-l border-line bg-steel p-12 text-white lg:flex">
         <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-brand/20 blur-3xl" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/brand/trussly-logo.png" alt="Trussly" className="relative mb-auto h-56 w-56 self-center rounded-3xl" />
+        <img src="/brand/trussly-logo.png" alt="Trussly" className="relative mb-auto h-56 w-56 self-center rounded-[3.25rem]" />
         <p className="font-display relative max-w-md text-3xl leading-tight font-semibold">
           85% of construction projects run over budget. <span className="text-brand">See yours before it does.</span>
         </p>

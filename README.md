@@ -6,7 +6,7 @@
 
 Trussly lets the people paying for a building see how it's really going without being on site. Supervisors file daily reports with geotagged photos, contractors submit evidence for milestones, managers inspect and approve, and owners sign off before money moves. Every invoice is tracked against a budget line, so overruns show up while they're still small.
 
-![Trussly landing page](docs/screenshots/landing.png)
+![Trussly front page: log in, sign up or try the demo](docs/screenshots/landing.png)
 
 ## Why
 
@@ -14,7 +14,7 @@ Trussly lets the people paying for a building see how it's really going without 
 
 ## Try the demo
 
-Run it locally (below), then pick a role on the landing page. The seeded company, **Northline Developments**, has three projects in different states: one on track, one at risk and over budget on two lines, and one just starting. Approvals are already waiting for each role.
+Run it locally (below), then pick a role on the front page. No sign-up is needed: the role tiles log you straight in. The product tour lives at `/about`. The seeded company, **Northline Developments**, has three projects in different states: one on track, one at risk and over budget on two lines, and one just starting. Approvals are already waiting for each role.
 
 | Role | Person | What to try |
 | --- | --- | --- |
@@ -41,6 +41,7 @@ All demo accounts use the password `trussly-demo`.
 | --- | --- |
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Project overview](docs/screenshots/project-overview.png) |
 | ![Milestones](docs/screenshots/milestones.png) | ![Budget and spend](docs/screenshots/budget.png) |
+| ![Product tour](docs/screenshots/about.png) | ![Photo timeline](docs/screenshots/photos.png) |
 
 <p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"></p>
 

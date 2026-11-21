@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   applicationName: "Trussly",
 };
 
-export const viewport: Viewport = { themeColor: "#000000", colorScheme: "dark" };
+export const viewport: Viewport = { themeColor: "#111111" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

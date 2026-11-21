@@ -17,12 +17,12 @@ export function ProjectCard({ s, currency }: { s: ProjectSummary; currency: stri
           ) : (
             <div className="blueprint h-full w-full" />
           )}
-          <div className="absolute top-3 right-3 rounded-full bg-black/80 backdrop-blur">
+          <div className="absolute top-3 right-3 rounded-full bg-white/90 backdrop-blur">
             <Badge tone={h.tone}>{h.label}</Badge>
           </div>
         </div>
         <div className="p-5">
-          <h3 className="font-display font-semibold group-hover:text-brand">{s.project.name}</h3>
+          <h3 className="font-display font-semibold group-hover:text-brand-text">{s.project.name}</h3>
           <p className="mt-1 flex items-center gap-1 text-sm text-muted">
             <MapPin className="h-3.5 w-3.5" /> {s.project.location}
           </p>

@@ -60,7 +60,7 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Stat label="Total budget" value={formatMoney(budget, currency, true)} sub={`${summaries.length} active sites`} />
             <Stat label="Approved spend" value={formatMoney(spent, currency, true)} sub={`${budget ? Math.round((spent / budget) * 100) : 0}% of budget`} />
-            <Stat label="Waiting on you" value={pending} sub={<Link href="/approvals" className="text-brand hover:underline">Open approvals</Link>} tone={pending ? "warn" : undefined} />
+            <Stat label="Waiting on you" value={pending} sub={<Link href="/approvals" className="text-brand-text hover:underline">Open approvals</Link>} tone={pending ? "warn" : undefined} />
             <Stat label="Projects at risk" value={atRisk.length} sub={atRisk.length ? atRisk.map((s) => s.project.name).join(", ") : "All on track"} tone={atRisk.length ? "bad" : "ok"} />
           </div>
 
@@ -73,7 +73,7 @@ export default async function DashboardPage() {
                   <ul className="mt-1 space-y-0.5 text-muted">
                     {warnings.map((w) => (
                       <li key={w.id}>
-                        <Link href={`/projects/${w.project.id}/budget`} className="font-medium text-ink hover:text-brand">
+                        <Link href={`/projects/${w.project.id}/budget`} className="font-medium text-ink hover:text-brand-text">
                           {w.project.name}
                         </Link>
                         : {w.category} is at {Math.round(w.ratio * 100)}% ({formatMoney(w.spent, currency)} of {formatMoney(w.budgeted, currency)})

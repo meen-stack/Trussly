@@ -46,6 +46,8 @@ const STEPS = [
   ["Watch the numbers", "The dashboard flags projects that are behind plan or heading over budget."],
 ];
 
+export const metadata = { title: "About" };
+
 export default async function Landing() {
   if (await getCurrentUser()) redirect("/dashboard");
   return (
@@ -54,7 +56,7 @@ export default async function Landing() {
       <section className="blueprint relative overflow-hidden bg-steel text-white">
         <div className="absolute -top-40 right-0 h-[28rem] w-[28rem] rounded-full bg-brand/25 blur-3xl" />
         <header className="relative mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-          <Logo tagline />
+          <Logo dark tagline />
           <nav className="flex items-center gap-2 text-sm">
             <Link href="/login" className="rounded-lg px-3 py-2 text-white/80 hover:text-white">
               Log in
@@ -112,7 +114,7 @@ export default async function Landing() {
         <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(({ Icon, title, body }) => (
             <div key={title} className="bg-surface p-7">
-              <Icon className="h-6 w-6 text-brand" />
+              <Icon className="h-6 w-6 text-brand-text" />
               <h3 className="font-display mt-4 text-lg font-semibold">{title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
             </div>
@@ -135,10 +137,10 @@ export default async function Landing() {
           </ol>
           <div className="mt-12 flex flex-wrap gap-6 text-sm text-muted">
             <span className="flex items-center gap-2">
-              <Smartphone className="h-4 w-4 text-brand" /> Works on any phone, no app to install
+              <Smartphone className="h-4 w-4 text-brand-text" /> Works on any phone, no app to install
             </span>
             <span className="flex items-center gap-2">
-              <Bell className="h-4 w-4 text-brand" /> Email and in-app alerts
+              <Bell className="h-4 w-4 text-brand-text" /> Email and in-app alerts
             </span>
           </div>
         </div>
@@ -170,7 +172,7 @@ export default async function Landing() {
 function Fact({ value, label }: { value: string; label: string }) {
   return (
     <div>
-      <p className="font-display text-5xl font-semibold text-brand">{value}</p>
+      <p className="font-display text-5xl font-semibold text-brand-text">{value}</p>
       <p className="mt-2 text-muted">{label}</p>
     </div>
   );

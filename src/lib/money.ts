@@ -13,3 +13,8 @@ export function parseMoney(input: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
   return Math.round(parseFloat(cleaned) * 100);
 }
+
+/** Unit prices keep their cents ($2.10), whole amounts don't ($48). */
+export function formatUnitPrice(cents: number, currency = "USD") {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100);
+}

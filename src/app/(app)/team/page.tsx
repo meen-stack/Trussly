@@ -5,6 +5,9 @@ import { can, ROLE_LABEL } from "@/lib/permissions";
 import { Badge, Card, CardHeader, Field, Input, PageHeader, Select } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { inviteUser } from "@/app/actions/auth";
+import { startDirect } from "@/app/actions/messages";
+import { scorecard } from "@/lib/commercial";
+import { MessageCircle, Star } from "lucide-react";
 
 export const metadata: Metadata = { title: "Team" };
 
@@ -12,7 +15,7 @@ export default async function CompanyTeamPage() {
   const user = await requireUser();
   const people = await db.user.findMany({
     where: { companyId: user.companyId },
-    include: { _count: { select: { memberships: true } } },
+    include: { _count: { select: { memberships: true } }, ratings: { select: { quality: true, timeliness: true, safety: true } } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
   const invites = await db.invite.findMany({ where: { companyId: user.companyId, usedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" } });
@@ -31,8 +34,24 @@ export default async function CompanyTeamPage() {
                   <p className="font-medium">{p.name}</p>
                   <p className="truncate text-xs text-muted">{p.email}</p>
                 </div>
+                {(() => {
+                  const sc = scorecard(p.ratings);
+                  return sc ? (
+                    <span className="flex items-center gap-1 text-xs font-medium" title={`Quality ${sc.quality.toFixed(1)} · Timeliness ${sc.timeliness.toFixed(1)} · Safety ${sc.safety.toFixed(1)} from ${sc.count} rating${sc.count === 1 ? "" : "s"}`}>
+                      <Star className="h-3.5 w-3.5 fill-brand text-brand" /> {sc.overall.toFixed(1)}
+                    </span>
+                  ) : null;
+                })()}
                 <span className="hidden text-xs text-muted sm:block">{p._count.memberships} projects</span>
                 <Badge>{ROLE_LABEL[p.role]}</Badge>
+                {p.id !== user.id && (
+                  <form action={startDirect}>
+                    <input type="hidden" name="userId" value={p.id} />
+                    <button className="rounded-lg p-2 text-muted hover:bg-bg hover:text-ink" title={`Message ${p.name}`} aria-label={`Message ${p.name}`}>
+                      <MessageCircle className="h-4 w-4" />
+                    </button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>

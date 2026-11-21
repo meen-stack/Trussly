@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import { format } from "date-fns";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { approvalWhere } from "@/lib/queues";
+import { approvalWhere, otherQueue } from "@/lib/queues";
 import { formatMoney } from "@/lib/money";
-import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { StatusBadge, WorkBadge } from "@/components/status";
 import { InvoiceTable, invoiceInclude } from "@/components/invoice-table";
 
@@ -22,13 +22,14 @@ export default async function ApprovalsPage() {
   const user = await requireUser();
   const currency = user.company.currency;
   const w = approvalWhere(user);
-  const [reports, milestones, expenses] = await Promise.all([
+  const [reports, milestones, expenses, other] = await Promise.all([
     w.reports ? db.dailyReport.findMany({ where: w.reports, include: { project: true, author: true }, orderBy: { date: "desc" } }) : [],
     w.milestones ? db.milestone.findMany({ where: w.milestones, include: { project: true, assignee: { select: { name: true } } }, orderBy: { dueDate: "asc" } }) : [],
     w.expenses ? db.expense.findMany({ where: w.expenses, include: invoiceInclude, orderBy: { createdAt: "asc" } }) : [],
+    otherQueue(user),
   ]);
-  const total = reports.length + milestones.length + expenses.length;
-  const hasQueue = w.reports || w.milestones || w.expenses;
+  const total = reports.length + milestones.length + expenses.length + other.length;
+  const hasQueue = w.reports || w.milestones || w.expenses || other.length > 0;
 
   return (
     <>
@@ -39,6 +40,24 @@ export default async function ApprovalsPage() {
         </Card>
       )}
       <div className="space-y-6">
+        {other.length > 0 && (
+          <Card>
+            <CardHeader title="Changes, orders, signatures and disputes" />
+            <ul className="divide-y divide-line">
+              {other.map((i) => (
+                <li key={i.id}>
+                  <Link href={i.href} className="flex items-center gap-3 px-5 py-4 text-sm hover:bg-bg">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{i.title}</p>
+                      <p className="text-muted">{i.sub}</p>
+                    </div>
+                    <Badge tone="warn">{i.kind}</Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
         {expenses.length > 0 && (
           <Card>
             <CardHeader title={user.role === "FINANCE" || user.role === "ADMIN" ? "Invoices to pay" : "Invoices to approve"} />

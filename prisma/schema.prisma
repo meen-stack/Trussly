@@ -52,37 +52,86 @@ enum ExpenseStatus {
   PAYMENT_REJECTED
 }
 
+enum ChangeOrderStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+enum PurchaseOrderStatus {
+  PENDING_APPROVAL
+  ISSUED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum MovementKind {
+  RECEIVED
+  USED
+  ADJUSTED
+}
+
+enum DocumentCategory {
+  DRAWING
+  CONTRACT
+  PERMIT
+  SPECIFICATION
+  REPORT
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  ESCALATED
+  RESOLVED
+}
+
 model Company {
-  id                String    @id @default(cuid())
+  id                String         @id @default(cuid())
   name              String
-  currency          String    @default("USD")
-  approvalThreshold Int       @default(1000000) // cents; spend above this needs owner approval
-  retentionPercent  Int       @default(5) // held back from contractor invoices until handover
-  paymentTermsDays  Int       @default(30)
-  createdAt         DateTime  @default(now())
+  currency          String         @default("USD")
+  approvalThreshold Int            @default(1000000) // cents; spend above this needs owner approval
+  retentionPercent  Int            @default(5) // held back from contractor invoices until handover
+  paymentTermsDays  Int            @default(30)
+  createdAt         DateTime       @default(now())
   users             User[]
   projects          Project[]
   invites           Invite[]
+  conversations     Conversation[]
 }
 
 model User {
-  id            String          @id @default(cuid())
-  name          String
-  email         String          @unique
-  passwordHash  String
-  role          Role
-  title         String?
-  companyId     String
-  company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt     DateTime        @default(now())
-  memberships   ProjectMember[]
-  reports       DailyReport[]   @relation("ReportAuthor")
-  expenses      Expense[]       @relation("ExpenseSubmitter")
-  assignedWork  Milestone[]     @relation("WorkAssignee")
-  payments      Payment[]
-  notifications Notification[]
-  auditEvents   AuditEvent[]
-  resetTokens   PasswordReset[]
+  id              String               @id @default(cuid())
+  name            String
+  email           String               @unique
+  passwordHash    String
+  role            Role
+  title           String?
+  companyId       String
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime             @default(now())
+  memberships     ProjectMember[]
+  reports         DailyReport[]        @relation("ReportAuthor")
+  expenses        Expense[]            @relation("ExpenseSubmitter")
+  assignedWork    Milestone[]          @relation("WorkAssignee")
+  payments        Payment[]
+  changeOrders    ChangeOrder[]        @relation("ChangeRequester")
+  changeDecided   ChangeOrder[]        @relation("ChangeDecider")
+  purchases       PurchaseOrder[]
+  movements       MaterialMovement[]
+  documents       Document[]
+  signatures      Signature[]
+  ratingsGiven    Rating[]             @relation("Rater")
+  ratings         Rating[]             @relation("RatedContractor")
+  disputes        Dispute[]            @relation("DisputeRaiser")
+  disputesSettled Dispute[]            @relation("DisputeResolver")
+  disputeNotes    DisputeMessage[]
+  chats           ConversationMember[]
+  messages        Message[]
+  notifications   Notification[]
+  auditEvents     AuditEvent[]
+  resetTokens     PasswordReset[]
 }
 
 model Invite {
@@ -107,22 +156,29 @@ model PasswordReset {
 }
 
 model Project {
-  id          String          @id @default(cuid())
-  name        String
-  location    String
-  description String?
-  coverUrl    String?
-  status      ProjectStatus   @default(ACTIVE)
-  startDate   DateTime
-  endDate     DateTime
-  companyId   String
-  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt   DateTime        @default(now())
-  members     ProjectMember[]
-  budgetLines BudgetLine[]
-  milestones  Milestone[]
-  reports     DailyReport[]
-  auditEvents AuditEvent[]
+  id           String          @id @default(cuid())
+  name         String
+  location     String
+  description  String?
+  coverUrl     String?
+  status       ProjectStatus   @default(ACTIVE)
+  startDate    DateTime
+  endDate      DateTime
+  companyId    String
+  company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  members      ProjectMember[]
+  budgetLines  BudgetLine[]
+  milestones   Milestone[]
+  reports      DailyReport[]
+  auditEvents  AuditEvent[]
+  changeOrders ChangeOrder[]
+  purchases    PurchaseOrder[]
+  materials    Material[]
+  documents    Document[]
+  ratings      Rating[]
+  disputes     Dispute[]
+  conversation Conversation?
 }
 
 model ProjectMember {
@@ -136,12 +192,14 @@ model ProjectMember {
 }
 
 model BudgetLine {
-  id        String    @id @default(cuid())
-  projectId String
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  category  String
-  budgeted  Int // cents
-  expenses  Expense[]
+  id           String          @id @default(cuid())
+  projectId    String
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category     String
+  budgeted     Int // cents, the current budget; approving a change order adds its amount
+  expenses     Expense[]
+  changeOrders ChangeOrder[]
+  purchases    PurchaseOrder[]
 }
 
 model Milestone {
@@ -166,6 +224,9 @@ model Milestone {
   verifiedAt    DateTime?
   photos        Photo[]
   invoices      Expense[]
+  changeOrders  ChangeOrder[]
+  ratings       Rating[]
+  disputes      Dispute[]
 }
 
 model DailyReport {
@@ -206,24 +267,27 @@ model Photo {
 }
 
 model Expense {
-  id           String        @id @default(cuid())
-  budgetLineId String
-  budgetLine   BudgetLine    @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
-  submitterId  String
-  submitter    User          @relation("ExpenseSubmitter", fields: [submitterId], references: [id])
-  vendor       String
-  description  String
-  milestoneId  String?
-  milestone    Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  amount       Int // cents
-  retention    Int           @default(0) // cents held back until handover
-  invoiceUrl   String?
-  status       ExpenseStatus @default(SUBMITTED)
-  reviewNote   String?
-  dueDate      DateTime?
-  createdAt    DateTime      @default(now())
-  decidedAt    DateTime?
-  payments     Payment[]
+  id              String         @id @default(cuid())
+  budgetLineId    String
+  budgetLine      BudgetLine     @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  submitterId     String
+  submitter       User           @relation("ExpenseSubmitter", fields: [submitterId], references: [id])
+  vendor          String
+  description     String
+  milestoneId     String?
+  milestone       Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  amount          Int // cents
+  retention       Int            @default(0) // cents held back until handover
+  invoiceUrl      String?
+  status          ExpenseStatus  @default(SUBMITTED)
+  reviewNote      String?
+  dueDate         DateTime?
+  createdAt       DateTime       @default(now())
+  decidedAt       DateTime?
+  payments        Payment[]
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  disputes        Dispute[]
 }
 
 model Payment {
@@ -263,4 +327,208 @@ model AuditEvent {
   createdAt  DateTime @default(now())
 
   @@index([projectId, createdAt])
+}
+
+/// A priced change to the scope. Approved changes adjust the budget line, the work value and the end date.
+model ChangeOrder {
+  id            String            @id @default(cuid())
+  projectId     String
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number        Int
+  title         String
+  reason        String
+  amount        Int // cents, negative for savings
+  daysImpact    Int               @default(0)
+  budgetLineId  String
+  budgetLine    BudgetLine        @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  milestoneId   String?
+  milestone     Milestone?        @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  status        ChangeOrderStatus @default(PROPOSED)
+  requestedById String
+  requestedBy   User              @relation("ChangeRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  decidedById   String?
+  decidedBy     User?             @relation("ChangeDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decisionNote  String?
+  decidedAt     DateTime?
+  createdAt     DateTime          @default(now())
+  signatures    Signature[]
+
+  @@unique([projectId, number])
+}
+
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  projectId    String
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number       Int
+  supplier     String
+  budgetLineId String
+  budgetLine   BudgetLine          @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  status       PurchaseOrderStatus @default(ISSUED)
+  expectedAt   DateTime?
+  createdById  String
+  createdBy    User                @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now())
+  items        PurchaseOrderItem[]
+  invoices     Expense[]
+
+  @@unique([projectId, number])
+}
+
+model PurchaseOrderItem {
+  id              String             @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  materialId      String
+  material        Material           @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity        Float
+  unitPrice       Int // cents
+  received        Float              @default(0)
+  movements       MaterialMovement[]
+}
+
+model Material {
+  id         String              @id @default(cuid())
+  projectId  String
+  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  unit       String
+  reorderAt  Float               @default(0) // alert when stock falls to this
+  orderLines PurchaseOrderItem[]
+  movements  MaterialMovement[]
+
+  @@unique([projectId, name])
+}
+
+model MaterialMovement {
+  id         String             @id @default(cuid())
+  materialId String
+  material   Material           @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  kind       MovementKind
+  quantity   Float // always positive; kind says which way
+  note       String?
+  poItemId   String?
+  poItem     PurchaseOrderItem? @relation(fields: [poItemId], references: [id], onDelete: SetNull)
+  userId     String
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime           @default(now())
+}
+
+model Document {
+  id           String           @id @default(cuid())
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  category     DocumentCategory
+  url          String
+  fileName     String
+  version      Int              @default(1)
+  signerRoles  Role[] // roles that must sign before the document is fully executed
+  uploadedById String
+  uploadedBy   User             @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  createdAt    DateTime         @default(now())
+  signatures   Signature[]
+}
+
+/// A typed-name electronic signature with a tamper-evident fingerprint.
+model Signature {
+  id            String       @id @default(cuid())
+  documentId    String?
+  document      Document?    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  changeOrderId String?
+  changeOrder   ChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signedName    String
+  role          Role
+  fingerprint   String
+  signedAt      DateTime     @default(now())
+}
+
+model Rating {
+  id           String     @id @default(cuid())
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contractorId String
+  contractor   User       @relation("RatedContractor", fields: [contractorId], references: [id], onDelete: Cascade)
+  milestoneId  String?    @unique
+  milestone    Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  raterId      String
+  rater        User       @relation("Rater", fields: [raterId], references: [id], onDelete: Cascade)
+  quality      Int // 1 to 5
+  timeliness   Int
+  safety       Int
+  comment      String?
+  createdAt    DateTime   @default(now())
+}
+
+model Dispute {
+  id           String           @id @default(cuid())
+  projectId    String
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  milestoneId  String?
+  milestone    Milestone?       @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  expenseId    String?
+  expense      Expense?         @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  amount       Int? // cents in dispute
+  status       DisputeStatus    @default(OPEN)
+  raisedById   String
+  raisedBy     User             @relation("DisputeRaiser", fields: [raisedById], references: [id], onDelete: Cascade)
+  resolution   String?
+  resolvedById String?
+  resolvedBy   User?            @relation("DisputeResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  messages     DisputeMessage[]
+}
+
+model DisputeMessage {
+  id        String   @id @default(cuid())
+  disputeId String
+  dispute   Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+/// A direct chat (no title), a named group chat, the company-wide chat, or the group thread for a project.
+model Conversation {
+  id            String               @id @default(cuid())
+  companyId     String
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title         String? // set for group chats
+  companyWide   Boolean              @default(false)
+  createdById   String?
+  projectId     String?              @unique
+  project       Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastMessageAt DateTime             @default(now())
+  members       ConversationMember[]
+  messages      Message[]
+
+  @@index([companyId, lastMessageAt])
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
 }

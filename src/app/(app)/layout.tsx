@@ -5,15 +5,17 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ROLE_LABEL, can } from "@/lib/permissions";
 import { approvalCount } from "@/lib/queues";
+import { unreadMessages } from "@/lib/messages";
 import { logout } from "@/app/actions/auth";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
-  const [approvals, unread] = await Promise.all([
+  const [approvals, unread, messages] = await Promise.all([
     approvalCount(user),
     db.notification.count({ where: { userId: user.id, readAt: null } }),
+    unreadMessages(user.id),
   ]);
-  const counts = { approvals, unread };
+  const counts = { approvals, unread, messages };
   const initials = user.name
     .split(" ")
     .map((p) => p[0])
@@ -44,7 +46,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <Logo dark href="/dashboard" />
         </div>
         <div className="mt-6 flex-1">
-          <AppNav counts={counts} finance={can.seeFinance(user.role)} />
+          <AppNav counts={counts} finance={can.seeFinance(user.role)} analytics={can.seeAnalytics(user.role)} />
         </div>
         <div className="border-t border-white/10 pt-4">{userBlock}</div>
       </aside>
@@ -57,7 +59,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             </button>
           </form>
         </div>
-        <AppNav counts={counts} finance={can.seeFinance(user.role)} mobile />
+        <AppNav counts={counts} finance={can.seeFinance(user.role)} analytics={can.seeAnalytics(user.role)} mobile />
       </header>
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-6xl">{children}</div>

@@ -9,12 +9,14 @@ import { decideExpense, payExpense } from "@/app/actions/expenses";
 import { EmptyState, cn } from "./ui";
 import { PaymentBadge, WorkBadge } from "./status";
 import { InvoiceActions, type InvoiceOption } from "./invoice-actions";
+import { blocksPayment } from "@/lib/commercial";
 
 export type InvoiceRow = Expense & {
   budgetLine: Budgetline & { project: Pick<Project, "id" | "name"> };
   milestone: Milestone | null;
   submitter: Pick<User, "name">;
   payments: Payment[];
+  disputes: { status: "OPEN" | "ESCALATED" | "RESOLVED" }[];
 };
 
 const OPTIONS: InvoiceOption[] = ["approve", "reject", "process", "pay", "rejectPayment"];
@@ -25,7 +27,8 @@ export function InvoiceTable({ rows, role, currency, threshold, showProject = fa
   return (
     <ul className="divide-y divide-line">
       {rows.map((e) => {
-        const options = OPTIONS.filter((a) => nextInvoiceStatus(e.status, a, role, { amount: e.amount, threshold, workStatus: e.milestone?.status }).ok);
+        const onHold = blocksPayment(e.disputes);
+        const options = OPTIONS.filter((a) => nextInvoiceStatus(e.status, a, role, { amount: e.amount, threshold, workStatus: e.milestone?.status }).ok && !(onHold && (a === "pay" || a === "process")));
         const paid = paidOf(e);
         const balance = balanceOf(e);
         const blocked = e.status === "SUBMITTED" && role === "MANAGER" && e.milestone && e.milestone.status !== "VERIFIED";
@@ -72,6 +75,14 @@ export function InvoiceTable({ rows, role, currency, threshold, showProject = fa
               )}
               {e.reviewNote && <p className={cn("mt-1 text-xs", e.status.includes("REJECTED") && "text-bad")}>Note: {e.reviewNote}</p>}
               {blocked && <p className="mt-1 text-xs font-medium text-warn">Can be approved once the work is verified.</p>}
+              {onHold && (
+                <p className="mt-1 text-xs font-medium text-bad">
+                  In dispute: payment on hold.{" "}
+                  <a href={`/projects/${e.budgetLine.project.id}/disputes`} className="underline">
+                    See the dispute
+                  </a>
+                </p>
+              )}
             </div>
             <div className="sm:text-right">
               <PaymentBadge invoice={e} />
@@ -96,4 +107,5 @@ export const invoiceInclude = {
   milestone: true,
   submitter: { select: { name: true } },
   payments: { orderBy: { paidAt: "asc" } },
+  disputes: { select: { status: true } },
 } as const;

@@ -2,8 +2,9 @@
  * Seeds the demo company used by the "explore the demo" buttons.
  * Dates are relative to today so the demo always looks current. Safe to re-run: it rebuilds the demo company.
  */
-import { PrismaClient, type MilestoneStatus, type ExpenseStatus, type Role, type User } from "@prisma/client";
+import { PrismaClient, type Company, type DocumentCategory, type MilestoneStatus, type ExpenseStatus, type Role, type User } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { createHash } from "node:crypto";
 import { DEMO_EMAILS, DEMO_PASSWORD } from "../src/lib/demo";
 
 const db = new PrismaClient();
@@ -48,7 +49,8 @@ const REMARKS = ["Good productivity today. On track for the slab pour.", "Crew s
 async function main() {
   // On deploys we only seed once, so visitors' changes aren't wiped by every build.
   // Checking the newest demo account (not just the company) means deploys that add demo data reseed once.
-  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: DEMO_EMAILS.FINANCE } }))) {
+  // Bump this marker account when new demo data must reseed on deploy.
+  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: "jonah@demo.trussly.app" } }))) {
     console.log("Demo company already exists, skipping seed.");
     return;
   }
@@ -69,6 +71,7 @@ async function main() {
   const dev = await mk("Dev Patel", "SUPERVISOR", "dev@demo.trussly.app", "Site Supervisor");
   const ruth = await mk("Ruth Alvarez", "CONTRACTOR", "ruth@demo.trussly.app", "Alvarez Electrical");
   const fiona = await mk("Fiona Reyes", "FINANCE", DEMO_EMAILS.FINANCE, "Finance Officer");
+  const jonah = await mk("Jonah Price", "CONTRACTOR", "jonah@demo.trussly.app", "Price Roofing Co.");
 
   // Work items: title, deadline (days from today), value, work status, assignee, invoice, notes.
   type Inv = { status: ExpenseStatus; paidShare?: number; dueIn?: number; note?: string };
@@ -111,7 +114,7 @@ async function main() {
         ["Contingency", 0.08, 0.1],
       ],
       supervisor: sam,
-      contractors: [carla, ruth],
+      contractors: [carla, ruth, jonah],
       reportDays: 34,
       skipToday: false,
       work: [
@@ -121,7 +124,7 @@ async function main() {
         { title: "Level 2 slab poured", due: 2, value: 150_000, status: "SUBMITTED", who: carla, line: "Structure", note: "Slab poured and cured. Cube test results attached." },
         { title: "Electrical first fix, levels 1 and 2", due: -3, value: 9_500, status: "INSPECTED", who: ruth, line: "MEP", note: "All circuits tested. Certificates on site." },
         { title: "Level 3 and 4 frame", due: 45, value: 220_000, status: "IN_PROGRESS", who: carla, line: "Structure" },
-        { title: "Roof watertight", due: 110, value: 160_000, status: "NOT_STARTED", who: null, line: "Roofing" },
+        { title: "Roof watertight", due: 110, value: 160_000, status: "NOT_STARTED", who: jonah, line: "Roofing" },
       ],
       extra: [
         ["Structure", "Texas Rebar Supply", "Rebar for level 3 slab", 8_400, "SUBMITTED", marcus],
@@ -147,13 +150,14 @@ async function main() {
         ["Contingency", 0.07, 0.6],
       ],
       supervisor: dev,
-      contractors: [carla, ruth],
+      contractors: [carla, ruth, jonah],
       reportDays: 30,
       skipToday: true,
       work: [
         { title: "Basement and foundations", due: -150, value: 260_000, status: "VERIFIED", who: carla, line: "Foundations", inv: { status: "PAID", paidShare: 1 } },
         { title: "Structural frame", due: -60, value: 300_000, status: "VERIFIED", who: carla, line: "Structure", inv: { status: "APPROVED", dueIn: -6 } },
-        { title: "Roof watertight", due: -20, value: 120_000, status: "CORRECTIONS", who: carla, line: "Roofing", note: "Flashing incomplete at the plant room upstand. Fix and resubmit." },
+        { title: "Plant room roof deck", due: -95, value: 40_000, status: "VERIFIED", who: jonah, line: "Roofing", inv: { status: "PAID", paidShare: 1 } },
+        { title: "Roof watertight", due: -20, value: 120_000, status: "CORRECTIONS", who: jonah, line: "Roofing", note: "Flashing incomplete at the plant room upstand. Fix and resubmit." },
         { title: "Electrical containment", due: -8, value: 8_000, status: "VERIFIED", who: ruth, line: "MEP", inv: { status: "APPROVED", dueIn: 21 } },
         { title: "MEP second fix", due: 25, value: 200_000, status: "IN_PROGRESS", who: ruth, line: "MEP" },
         { title: "Handover", due: 55, value: 180_000, status: "NOT_STARTED", who: null, line: "Finishes" },
@@ -386,6 +390,8 @@ async function main() {
     }
   }
 
+  await seedAdvanced({ company, olivia, marcus, sam, carla, dev, ruth, fiona, jonah });
+
   // A few notifications so the bell isn't empty on first visit.
   const notes: [string, string, string, string][] = [
     [olivia.id, "Final approval needed: Ground and level 1 frame", "Marcus Reid approved $180,000 of work, over your limit.", "Harbour View Residences"],
@@ -394,7 +400,7 @@ async function main() {
     [marcus.id, "Ready for your review: Electrical first fix, levels 1 and 2", "Sam Okafor inspected and passed the work.", "Harbour View Residences"],
     [marcus.id, "No daily report: Riverside Medical Centre", "Nobody has filed today's site report yet.", "Riverside Medical Centre"],
     [sam.id, "Inspection requested: Level 2 slab poured", "Carla Mendes submitted work with photos.", "Harbour View Residences"],
-    [carla.id, "Corrections needed: Roof watertight", "Flashing incomplete at the plant room upstand. Fix and resubmit.", "Riverside Medical Centre"],
+    [jonah.id, "Corrections needed: Roof watertight", "Flashing incomplete at the plant room upstand. Fix and resubmit.", "Riverside Medical Centre"],
     [carla.id, "Payment received: $125,400", "Mendes Structural Ltd, ref ACH-04101. Balance remaining: $83,600.", "Harbour View Residences"],
     [fiona.id, "Overdue: $300,000 to Mendes Structural Ltd", "Riverside Medical Centre. This invoice was due 6 days ago.", "Riverside Medical Centre"],
     [fiona.id, "Ready to pay: $8,000", "Alvarez Electrical on Riverside Medical Centre is approved for payment.", "Riverside Medical Centre"],
@@ -405,6 +411,246 @@ async function main() {
   }
 
   console.log(`Seeded demo company "${company.name}". Demo password: ${DEMO_PASSWORD}`);
+}
+
+type People = Record<"olivia" | "marcus" | "sam" | "carla" | "dev" | "ruth" | "fiona" | "jonah", User> & { company: Company };
+
+/** Change orders, materials and purchase orders, documents and signatures, ratings, disputes and chats. */
+async function seedAdvanced(x: People) {
+  const { company, olivia, marcus, sam, carla, dev, ruth, fiona, jonah } = x;
+  const hv = await db.project.findFirstOrThrow({ where: { companyId: company.id, name: "Harbour View Residences" }, include: { budgetLines: true, milestones: true } });
+  const rv = await db.project.findFirstOrThrow({ where: { companyId: company.id, name: "Riverside Medical Centre" }, include: { budgetLines: true, milestones: true } });
+  const ok = await db.project.findFirstOrThrow({ where: { companyId: company.id, name: "Oakridge Townhomes" }, include: { milestones: true } });
+  const line = (p: typeof hv, cat: string) => p.budgetLines.find((l) => l.category === cat)!;
+  const work = (p: { milestones: { id: string; title: string }[] }, title: string) => p.milestones.find((m) => m.title === title)!;
+  const log = (projectId: string, actorId: string, action: string, entityType: string, entityId: string, createdAt: Date, note?: string) =>
+    db.auditEvent.create({ data: { actorId, action, entityType, entityId, projectId, createdAt, detail: note ? { note } : undefined } });
+  const print = (...parts: (string | number)[]) => createHash("sha256").update(parts.join("|")).digest("hex");
+  const money = (c: number) => `$${(c / 100).toLocaleString("en-US")}`;
+
+  // ---- Change orders ----
+  type CO = { p: typeof hv; title: string; reason: string; dollars: number; days: number; cat: string; work?: string; by: User; decided?: { by: User; ago: number; approve: boolean; note?: string }; ago: number };
+  const cos: CO[] = [
+    { p: hv, title: "Upgrade lobby glazing to low-E units", reason: "Client request after the energy model review. Reduces cooling load and meets the green lease terms.", dollars: 18_500, days: 5, cat: "Finishes", by: marcus, ago: 30, decided: { by: olivia, ago: 26, approve: true } },
+    { p: hv, title: "Omit basement storage partitions", reason: "Tenant mix changed; storage cages will be supplied by the retail tenant.", dollars: -6_200, days: 0, cat: "Finishes", by: marcus, ago: 19, decided: { by: marcus, ago: 18, approve: true } },
+    { p: hv, title: "Additional rebar at transfer beam (RFI-14)", reason: "Engineer's response to RFI-14 adds two T25 bars top and bottom at grid C/4. See structural drawings rev B.", dollars: 7_800, days: 2, cat: "Structure", work: "Level 3 and 4 frame", by: carla, ago: 3 },
+    { p: hv, title: "Rooftop solar array, 42 kW", reason: "Owner's sustainability target. Panels, inverters and roof penetrations.", dollars: 64_000, days: 8, cat: "Roofing", by: marcus, ago: 2 },
+    { p: rv, title: "Extra fire stopping to service risers", reason: "Fire engineer's inspection found unsealed penetrations not shown on the original MEP drawings.", dollars: 12_000, days: 3, cat: "MEP", work: "MEP second fix", by: ruth, ago: 40, decided: { by: olivia, ago: 37, approve: true } },
+    { p: rv, title: "Premium vinyl flooring in waiting areas", reason: "Architect proposed a higher grade finish.", dollars: 9_400, days: 0, cat: "Finishes", by: marcus, ago: 22, decided: { by: marcus, ago: 21, approve: false, note: "Not in the client's brief. Stay with the specified finish." } },
+  ];
+  const counters = new Map<string, number>();
+  for (const c of cos) {
+    const number = (counters.get(c.p.id) ?? 0) + 1;
+    counters.set(c.p.id, number);
+    const amount = $(c.dollars);
+    const createdAt = at(daysAgo(c.ago), 9);
+    const bl = line(c.p, c.cat);
+    const m = c.work ? work(c.p, c.work) : null;
+    const decidedAt = c.decided ? at(daysAgo(c.decided.ago), 15) : null;
+    const co = await db.changeOrder.create({
+      data: {
+        projectId: c.p.id, number, title: c.title, reason: c.reason, amount, daysImpact: c.days, budgetLineId: bl.id, milestoneId: m?.id, requestedById: c.by.id, createdAt,
+        status: c.decided ? (c.decided.approve ? "APPROVED" : "REJECTED") : "PROPOSED",
+        decidedById: c.decided?.by.id, decidedAt, decisionNote: c.decided?.note,
+      },
+    });
+    await log(c.p.id, c.by.id, `proposed change order CO-${number} "${c.title}" (${money(amount)})`, "ChangeOrder", co.id, createdAt);
+    if (c.decided && decidedAt) {
+      await log(c.p.id, c.decided.by.id, `${c.decided.approve ? "approved and signed" : "rejected"} change order CO-${number} (${money(amount)})`, "ChangeOrder", co.id, decidedAt, c.decided.note);
+      if (c.decided.approve) {
+        await db.signature.create({ data: { changeOrderId: co.id, userId: c.decided.by.id, signedName: c.decided.by.name, role: c.decided.by.role, signedAt: decidedAt, fingerprint: print(co.id, number, amount, c.title, c.decided.by.id, decidedAt.toISOString()) } });
+        await db.budgetLine.update({ where: { id: bl.id }, data: { budgeted: { increment: amount } } });
+        if (m) await db.milestone.update({ where: { id: m.id }, data: { paymentAmount: { increment: amount } } });
+        if (c.days) await db.project.update({ where: { id: c.p.id }, data: { endDate: { set: new Date((await db.project.findUniqueOrThrow({ where: { id: c.p.id } })).endDate.getTime() + c.days * DAY) } } });
+      }
+    }
+  }
+
+  // ---- Materials and purchase orders (Harbour View) ----
+  const mats = Object.fromEntries(
+    await Promise.all(
+      ([
+        ["rebar", "Rebar #5", "tons", 4],
+        ["concrete", "Ready-mix concrete", "m³", 10],
+        ["blocks", "Concrete blocks", "blocks", 500],
+        ["ply", "Formwork plywood", "sheets", 20],
+        ["cable", "Electrical cable 2.5 mm²", "m", 300],
+      ] as const).map(async ([k, name, unit, reorderAt]) => [k, await db.material.create({ data: { projectId: hv.id, name, unit, reorderAt } })] as const),
+    ),
+  );
+  type PO = { n: number; supplier: string; cat: string; by: User; ago: number; status: "PENDING_APPROVAL" | "ISSUED" | "PARTIALLY_RECEIVED" | "RECEIVED"; items: [keyof typeof mats, number, number, number[]][]; expected?: number }; // material, qty, unit $, deliveries
+  const pos: PO[] = [
+    { n: 1, supplier: "Texas Rebar Supply", cat: "Structure", by: marcus, ago: 48, status: "RECEIVED", items: [["rebar", 24, 1_050, [12, 12]]] },
+    { n: 2, supplier: "Gulf Ready-Mix", cat: "Structure", by: marcus, ago: 20, status: "PARTIALLY_RECEIVED", items: [["concrete", 120, 165, [64]]], expected: 6 },
+    { n: 3, supplier: "Alvarez Electrical", cat: "MEP", by: marcus, ago: 9, status: "ISSUED", items: [["cable", 2_000, 1.85, []]], expected: 4 },
+    { n: 4, supplier: "Metro Building Supply", cat: "Structure", by: marcus, ago: 1, status: "PENDING_APPROVAL", items: [["blocks", 6_000, 2.1, []], ["ply", 80, 48, []]], expected: 10 },
+  ];
+  for (const po of pos) {
+    const createdAt = at(daysAgo(po.ago), 8);
+    const order = await db.purchaseOrder.create({
+      data: { projectId: hv.id, number: po.n, supplier: po.supplier, budgetLineId: line(hv, po.cat).id, status: po.status, createdById: po.by.id, createdAt, expectedAt: po.expected ? new Date(today.getTime() + po.expected * DAY) : null },
+    });
+    const total = po.items.reduce((s, [, q, p]) => s + q * $(p), 0);
+    await log(hv.id, po.by.id, `raised PO-${po.n} to ${po.supplier} (${money(total)})${po.status === "PENDING_APPROVAL" ? ", awaiting the owner" : ""}`, "PurchaseOrder", order.id, createdAt);
+    for (const [k, quantity, price, deliveries] of po.items) {
+      const item = await db.purchaseOrderItem.create({ data: { purchaseOrderId: order.id, materialId: mats[k].id, quantity, unitPrice: $(price), received: deliveries.reduce((s, d) => s + d, 0) } });
+      for (const [i, q] of deliveries.entries()) {
+        const when = at(daysAgo(Math.max(po.ago - 4 - i * 9, 1)), 7);
+        await db.materialMovement.create({ data: { materialId: mats[k].id, kind: "RECEIVED", quantity: q, note: `PO-${po.n}, delivery note DN-${4100 + po.n * 10 + i}`, poItemId: item.id, userId: sam.id, createdAt: when } });
+        await log(hv.id, sam.id, `received ${q} ${mats[k].unit} ${mats[k].name} on PO-${po.n}`, "PurchaseOrder", order.id, when);
+      }
+    }
+  }
+  // Earlier stock bought before tracking started, and usage on site.
+  await db.materialMovement.create({ data: { materialId: mats.blocks.id, kind: "ADJUSTED", quantity: 1_400, note: "Opening stock count", userId: sam.id, createdAt: at(daysAgo(30), 7) } });
+  await db.materialMovement.create({ data: { materialId: mats.ply.id, kind: "ADJUSTED", quantity: 60, note: "Opening stock count", userId: sam.id, createdAt: at(daysAgo(30), 7) } });
+  const uses: [keyof typeof mats, number, number, string][] = [
+    ["rebar", 9, 38, "Level 1 slab and columns"],
+    ["rebar", 8, 22, "Level 2 slab"],
+    ["rebar", 4, 6, "Level 3 columns"],
+    ["concrete", 34, 12, "Level 2 slab pour"],
+    ["concrete", 22, 4, "Level 3 columns"],
+    ["blocks", 620, 14, "Ground floor partitions"],
+    ["blocks", 360, 5, "Level 1 stair core"],
+    ["ply", 38, 10, "Level 3 formwork"],
+  ];
+  for (const [k, q, ago, note] of uses) {
+    const when = at(daysAgo(ago), 16);
+    await db.materialMovement.create({ data: { materialId: mats[k].id, kind: "USED", quantity: q, note, userId: sam.id, createdAt: when } });
+    await log(hv.id, sam.id, `used ${q} ${mats[k].unit} of ${mats[k].name}`, "Material", mats[k].id, when);
+  }
+
+  // ---- Documents and signatures ----
+  type Doc = { p: { id: string }; title: string; cat: DocumentCategory; file: string; v?: number; by: User; ago: number; signers?: Role[]; signed?: [User, number][] };
+  const docs: Doc[] = [
+    { p: hv, title: "Structural drawings", cat: "DRAWING", file: "structural-drawings-v1.pdf", by: marcus, ago: 135 },
+    { p: hv, title: "Structural drawings", cat: "DRAWING", file: "structural-drawings-v2.pdf", v: 2, by: marcus, ago: 4 },
+    { p: hv, title: "Subcontract: Mendes Structural", cat: "CONTRACT", file: "main-contract-mendes.pdf", by: marcus, ago: 132, signers: ["OWNER", "CONTRACTOR"], signed: [[olivia, 131], [carla, 130]] },
+    { p: hv, title: "Subcontract: Alvarez Electrical", cat: "CONTRACT", file: "electrical-subcontract-alvarez.pdf", by: marcus, ago: 3, signers: ["OWNER", "MANAGER", "CONTRACTOR"], signed: [[marcus, 3]] },
+    { p: hv, title: "Building permit BP-2026-0418", cat: "PERMIT", file: "building-permit.pdf", by: marcus, ago: 138 },
+    { p: rv, title: "Main contract", cat: "CONTRACT", file: "riverside-contract.pdf", by: olivia, ago: 208, signers: ["OWNER", "MANAGER"], signed: [[olivia, 207], [marcus, 207]] },
+    { p: rv, title: "Fire strategy report", cat: "REPORT", file: "fire-strategy.pdf", by: marcus, ago: 41 },
+  ];
+  for (const d of docs) {
+    const createdAt = at(daysAgo(d.ago), 10);
+    const doc = await db.document.create({ data: { projectId: d.p.id, title: d.title, category: d.cat, url: `/demo/docs/${d.file}`, fileName: d.file, version: d.v ?? 1, signerRoles: d.signers ?? [], uploadedById: d.by.id, createdAt } });
+    await log(d.p.id, d.by.id, `uploaded "${d.title}"${d.v ? ` (version ${d.v})` : ""}`, "Document", doc.id, createdAt);
+    for (const [u, ago] of d.signed ?? []) {
+      const signedAt = at(daysAgo(ago), 14);
+      await db.signature.create({ data: { documentId: doc.id, userId: u.id, signedName: u.name, role: u.role, signedAt, fingerprint: print(doc.id, doc.url, doc.version, u.id, u.name, signedAt.toISOString()) } });
+      await log(d.p.id, u.id, `signed "${d.title}" v${doc.version}`, "Document", doc.id, signedAt);
+    }
+  }
+
+  // ---- Ratings on verified work ----
+  const ratings: [{ id: string; milestones: { id: string; title: string; assigneeId: string | null }[] }, string, User, number, number, number, string | null][] = [
+    [hv, "Site cleared and hoarded", marcus, 5, 4, 5, "Tidy site, good hoarding."],
+    [hv, "Foundations complete", marcus, 4, 4, 5, null],
+    [rv, "Basement and foundations", marcus, 4, 3, 4, "Two weeks late on the basement walls, quality good."],
+    [rv, "Structural frame", marcus, 4, 3, 5, null],
+    [rv, "Electrical containment", dev, 5, 5, 4, "Neat runs, certificates on time."],
+    [rv, "Plant room roof deck", dev, 3, 2, 4, "Deck finished late and the first inspection failed."],
+    [ok, "Site cleared and services located", marcus, 5, 5, 5, "Ahead of programme."],
+  ];
+  for (const [p, title, rater, quality, timeliness, safety, comment] of ratings) {
+    const m = p.milestones.find((w) => w.title === title)!;
+    // Low timeliness scores go with work verified after its deadline.
+    if (timeliness <= 3) {
+      const full = await db.milestone.findUniqueOrThrow({ where: { id: m.id } });
+      await db.milestone.update({ where: { id: m.id }, data: { verifiedAt: new Date(full.dueDate.getTime() + (timeliness === 2 ? 9 : 4) * DAY) } });
+    }
+    await db.rating.create({ data: { projectId: p.id, contractorId: m.assigneeId!, milestoneId: m.id, raterId: rater.id, quality, timeliness, safety, comment, createdAt: at(daysAgo(5), 11) } });
+  }
+
+  // ---- Disputes ----
+  const rvInvoice = await db.expense.findFirstOrThrow({ where: { milestone: { projectId: rv.id, title: "Structural frame" } } });
+  const disputes: { p: { id: string }; title: string; by: User; ago: number; status: "OPEN" | "ESCALATED" | "RESOLVED"; milestoneId?: string; expenseId?: string; dollars?: number; thread: [User, number, string][]; resolved?: [User, number, string] }[] = [
+    {
+      p: rv, title: "Flashing detail missing from drawings", by: jonah, ago: 18, status: "OPEN", milestoneId: work(rv, "Roof watertight").id, dollars: 6_500,
+      thread: [
+        [jonah, 18, "The plant room upstand flashing isn't on drawing R-04. We priced what was drawn. The extra flashing is $6,500 of work we didn't include."],
+        [marcus, 17, "Spec section 07 62 00 requires flashing at all upstands. I'll check with the architect whether R-04 is wrong or just incomplete."],
+        [jonah, 15, "Thanks. We can do the work now and settle the cost after, so the roof isn't held up."],
+      ],
+    },
+    {
+      p: rv, title: "Back-charge for crane standby", by: marcus, ago: 9, status: "ESCALATED", expenseId: rvInvoice.id, dollars: 14_000,
+      thread: [
+        [marcus, 9, "The frame was 6 days late, and we paid crane standby of $14,000. I'm proposing to deduct it from this invoice."],
+        [carla, 8, "The delay was caused by late steel deliveries from the client-nominated supplier. We don't accept the back-charge."],
+        [marcus, 7, "Escalated to the owner. We can't agree this between us."],
+      ],
+    },
+    {
+      p: hv, title: "Skip hire charged twice", by: carla, ago: 60, status: "RESOLVED", milestoneId: work(hv, "Site cleared and hoarded").id, dollars: 1_200,
+      thread: [
+        [carla, 60, "Skip hire for week 3 was deducted from our invoice, but we hired our own skips that week."],
+        [marcus, 58, "Checked the delivery notes. You're right, ours went to the other site."],
+      ],
+      resolved: [marcus, 57, "Credit of $1,200 added to the next valuation."],
+    },
+  ];
+  for (const d of disputes) {
+    const createdAt = at(daysAgo(d.ago), 9);
+    const row = await db.dispute.create({
+      data: {
+        projectId: d.p.id, title: d.title, raisedById: d.by.id, status: d.status, milestoneId: d.milestoneId, expenseId: d.expenseId, amount: d.dollars ? $(d.dollars) : null, createdAt,
+        ...(d.resolved && { resolution: d.resolved[2], resolvedById: d.resolved[0].id, resolvedAt: at(daysAgo(d.resolved[1]), 12) }),
+        messages: { create: [...d.thread, ...(d.resolved ? [[d.resolved[0], d.resolved[1], `Resolved: ${d.resolved[2]}`] as [User, number, string]] : [])].map(([u, ago, body], i) => ({ authorId: u.id, body, createdAt: at(daysAgo(ago), 9 + i) })) },
+      },
+    });
+    await log(d.p.id, d.by.id, `raised a dispute: "${d.title}"`, "Dispute", row.id, createdAt, d.thread[0][2]);
+    if (d.status === "ESCALATED") await log(d.p.id, marcus.id, `escalated the dispute "${d.title}"`, "Dispute", row.id, at(daysAgo(7), 12));
+    if (d.resolved) await log(d.p.id, d.resolved[0].id, `resolved the dispute "${d.title}"`, "Dispute", row.id, at(daysAgo(d.resolved[1]), 12), d.resolved[2]);
+  }
+
+  // ---- Chats ----
+  const everyone = [olivia, marcus, sam, carla, dev, ruth, fiona, jonah];
+  const seen = (u: User, unread: string[]) => (unread.includes(u.id) ? new Date(0) : new Date());
+  type Line = [User, number, string]; // author, hours ago, text
+  const chat = async (data: { title?: string; companyWide?: boolean; projectId?: string; members: User[]; unreadFor?: User[] }, lines: Line[]) => {
+    const unread = (data.unreadFor ?? []).map((u) => u.id);
+    const last = lines.length ? new Date(Date.now() - Math.min(...lines.map((l) => l[1])) * 3600e3) : new Date();
+    const c = await db.conversation.create({
+      data: {
+        companyId: company.id, title: data.title, companyWide: data.companyWide ?? false, projectId: data.projectId, createdById: marcus.id, lastMessageAt: last,
+        members: { create: data.members.map((u) => ({ userId: u.id, lastReadAt: seen(u, unread) })) },
+        messages: { create: lines.map(([u, h, body]) => ({ authorId: u.id, body, createdAt: new Date(Date.now() - h * 3600e3) })) },
+      },
+    });
+    return c;
+  };
+  await chat({ title: "Northline Developments (everyone)", companyWide: true, members: everyone, unreadFor: [sam, carla, ruth, jonah, dev, fiona] }, [
+    [olivia, 52, "Morning all. Safety stand-down on every site Friday 7am after last week's near miss. Supervisors, please run it with your crews."],
+    [sam, 51, "Will do at Harbour View."],
+    [dev, 50, "Same at Riverside."],
+    [fiona, 6, "Reminder: invoices for this month need to be in by the 25th to make the next payment run."],
+  ]);
+  await chat({ projectId: hv.id, members: [olivia, fiona, marcus, sam, carla, ruth, jonah], unreadFor: [olivia, marcus] }, [
+    [sam, 30, "Level 2 slab cubes came back at 34 MPa on 7 days. Good to strip the soffit props on level 1."],
+    [marcus, 29, "Great. Carla, can you start level 3 columns Monday?"],
+    [carla, 28, "Yes, crew of 8 from Monday. Rebar for level 3 is on site."],
+    [ruth, 5, "First fix on levels 1 and 2 is done and tested. Certificates are uploaded with the work."],
+    [sam, 2, "Concrete delivery for level 3 columns is booked for Thursday 6am. PO-2 still has 56 m³ open."],
+  ]);
+  await chat({ projectId: rv.id, members: [olivia, fiona, marcus, dev, carla, ruth, jonah], unreadFor: [jonah] }, [
+    [dev, 26, "Roof inspection failed again at the plant room upstand. Photos are on the work item."],
+    [jonah, 25, "We'll fix the flashing Thursday. The drawing question is in the dispute."],
+    [marcus, 3, "Architect confirmed R-04 is being revised. Jonah, please go ahead and we'll settle the cost under the dispute."],
+  ]);
+  await chat({ projectId: ok.id, members: [olivia, fiona, marcus, sam, carla] }, [[marcus, 70, "Site setup is complete. Foundations start next week."]]);
+  await chat({ members: [marcus, carla], unreadFor: [marcus] }, [
+    [marcus, 27, "Carla, the RFI-14 rebar change order is in. I'll look at it today."],
+    [carla, 26, "Thanks. Price is from Texas Rebar's latest quote, attached to the order."],
+    [carla, 1, "Can we walk the level 3 deck tomorrow at 8 before the pour?"],
+  ]);
+  await chat({ members: [olivia, fiona], unreadFor: [olivia] }, [[fiona, 4, "Olivia, the $300,000 Mendes invoice on Riverside is overdue but on hold because of the crane dispute. Do you want to pay the undisputed part?"]]);
+  await chat({ title: "Harbour View structure", members: [olivia, marcus, sam, carla], unreadFor: [sam] }, [
+    [marcus, 48, "Group for the frame. Programme review every Monday 9am."],
+    [olivia, 47, "Thanks Marcus. Please flag anything that threatens the topping-out date."],
+    [carla, 20, "Level 3 columns are 2 days behind because of the rain, still fine for topping out."],
+    [sam, 19, "Agreed, the deck is safe to work on once the edge protection is up tomorrow."],
+  ]);
 }
 
 main()

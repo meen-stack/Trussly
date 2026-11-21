@@ -14,6 +14,9 @@ import { ActionForm } from "@/components/action-form";
 import { WorkActions } from "@/components/work-actions";
 import { addMilestone } from "@/app/actions/projects";
 import { transitionWork } from "@/app/actions/milestones";
+import { rateWork } from "@/app/actions/records";
+import { InlineForm } from "@/components/decision-form";
+import { ratingScore } from "@/lib/commercial";
 
 export const metadata: Metadata = { title: "Work" };
 
@@ -28,7 +31,7 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
   const [work, contractors] = await Promise.all([
     db.milestone.findMany({
       where: { projectId: project.id },
-      include: { photos: true, assignee: { select: { name: true, title: true } }, invoices: { include: { payments: true }, orderBy: { createdAt: "asc" } } },
+      include: { photos: true, ratings: true, assignee: { select: { name: true, title: true } }, invoices: { include: { payments: true }, orderBy: { createdAt: "asc" } } },
       orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }],
     }),
     db.user.findMany({ where: { role: "CONTRACTOR", memberships: { some: { projectId: project.id } } }, orderBy: { name: "asc" } }),
@@ -118,6 +121,33 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
                 </div>
               )}
               <WorkActions action={transitionWork.bind(null, project.id, m.id)} options={options} />
+              {m.ratings[0] && (
+                <p className="mt-3 text-sm">
+                  <span className="font-medium">Rating {ratingScore(m.ratings[0]).toFixed(1)}/5</span>
+                  <span className="text-muted">
+                    {" "}· quality {m.ratings[0].quality}, timeliness {m.ratings[0].timeliness}, safety {m.ratings[0].safety}
+                    {m.ratings[0].comment ? ` · "${m.ratings[0].comment}"` : ""}
+                  </span>
+                </p>
+              )}
+              {m.status === "VERIFIED" && m.assigneeId && !m.ratings[0] && can.rate(user.role) && (
+                <details className="mt-3 rounded-lg border border-line bg-bg p-3 text-sm">
+                  <summary className="cursor-pointer font-medium">Rate {m.assignee?.name ?? "the contractor"}</summary>
+                  <InlineForm action={rateWork.bind(null, project.id, m.id)} submitLabel="Save rating">
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["quality", "timeliness", "safety"] as const).map((k) => (
+                        <label key={k} className="space-y-1 text-xs capitalize">
+                          {k}
+                          <Select name={k} defaultValue="4">
+                            {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n}</option>)}
+                          </Select>
+                        </label>
+                      ))}
+                    </div>
+                    <Input name="comment" placeholder="Comment (optional)" />
+                  </InlineForm>
+                </details>
+              )}
             </Card>
           );
         })}

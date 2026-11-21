@@ -2,24 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, CheckSquare, FolderKanban, LayoutDashboard, Settings, Users, Wallet } from "lucide-react";
+import { BarChart3, Bell, CheckSquare, FolderKanban, LayoutDashboard, MessageCircle, Settings, Users, Wallet } from "lucide-react";
 import { cn } from "./ui";
 
 const ITEMS = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/projects", label: "Projects", Icon: FolderKanban },
   { href: "/approvals", label: "Approvals", Icon: CheckSquare, countKey: "approvals" },
+  { href: "/messages", label: "Messages", Icon: MessageCircle, countKey: "messages" },
   { href: "/finance", label: "Finance", Icon: Wallet, financeOnly: true },
+  { href: "/analytics", label: "Analytics", Icon: BarChart3, analyticsOnly: true },
   { href: "/notifications", label: "Notifications", Icon: Bell, countKey: "unread" },
   { href: "/team", label: "Team", Icon: Users },
   { href: "/settings", label: "Settings", Icon: Settings },
 ] as const;
 
-export function AppNav({ counts, mobile = false, finance = false }: { counts: { approvals: number; unread: number }; mobile?: boolean; finance?: boolean }) {
+export function AppNav({
+  counts,
+  mobile = false,
+  finance = false,
+  analytics = false,
+}: {
+  counts: { approvals: number; unread: number; messages: number };
+  mobile?: boolean;
+  finance?: boolean;
+  analytics?: boolean;
+}) {
   const pathname = usePathname();
   return (
     <nav className={mobile ? "flex gap-1 overflow-x-auto px-4 pb-3" : "space-y-1"}>
-      {ITEMS.filter((i) => finance || !("financeOnly" in i)).map(({ href, label, Icon, ...rest }) => {
+      {ITEMS.filter((i) => (finance || !("financeOnly" in i)) && (analytics || !("analyticsOnly" in i))).map(({ href, label, Icon, ...rest }) => {
         const active = pathname === href || pathname.startsWith(href + "/");
         const count = "countKey" in rest ? counts[rest.countKey] : 0;
         return (

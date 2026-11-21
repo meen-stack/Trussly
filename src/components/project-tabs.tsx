@@ -8,8 +8,12 @@ const TABS = [
   ["", "Overview"],
   ["/reports", "Daily reports"],
   ["/milestones", "Work"],
+  ["/changes", "Change orders"],
   ["/budget", "Budget & spend"],
+  ["/materials", "Materials"],
+  ["/documents", "Documents"],
   ["/photos", "Photos"],
+  ["/disputes", "Disputes"],
   ["/team", "Team"],
   ["/activity", "Audit trail"],
 ] as const;

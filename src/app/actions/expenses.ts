@@ -10,6 +10,7 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { applyPayment, nextInvoiceStatus, retentionFor, type InvoiceAction } from "@/lib/workflow";
 import { summarizeLine, WARN_AT } from "@/lib/budget";
 import { paidOf } from "@/lib/status";
+import { blocksPayment } from "@/lib/commercial";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { filesFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
@@ -91,7 +92,7 @@ async function loadInvoice(projectId: string, expenseId: string) {
   const project = await getProjectForUser(user, projectId);
   const expense = await db.expense.findFirst({
     where: { id: expenseId, budgetLine: { projectId: project.id } },
-    include: { budgetLine: true, milestone: true, payments: true },
+    include: { budgetLine: true, milestone: true, payments: true, disputes: { select: { status: true } } },
   });
   return { user, project, expense };
 }
@@ -159,6 +160,7 @@ export async function payExpense(projectId: string, expenseId: string, _: FormSt
   const company = user.company;
   const step = nextInvoiceStatus(expense.status, action, user.role, { amount: expense.amount, threshold: company.approvalThreshold });
   if (!step.ok) return { error: step.error };
+  if ((action === "pay" || action === "process") && blocksPayment(expense.disputes)) return { error: "This invoice is in dispute. Resolve the dispute before paying." };
   const money = (c: number) => formatMoney(c, company.currency);
   const href = `/projects/${project.id}/budget`;
 

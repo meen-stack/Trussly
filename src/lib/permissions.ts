@@ -12,6 +12,9 @@ export const can = {
   seeFinance: (r: Role) => r === "FINANCE" || r === "ADMIN" || r === "OWNER" || r === "MANAGER",
   inviteUsers: (r: Role) => r === "ADMIN" || r === "OWNER",
   /** Owners, admins and finance see every company project; others only projects they belong to. */
+  rate: (r: Role) => r === "MANAGER" || r === "OWNER" || r === "SUPERVISOR",
+  uploadDocument: (r: Role) => r !== "FINANCE",
+  seeAnalytics: (r: Role) => r === "ADMIN" || r === "OWNER" || r === "MANAGER" || r === "FINANCE",
   seeAllProjects: (r: Role) => r === "ADMIN" || r === "OWNER" || r === "FINANCE",
 };
 

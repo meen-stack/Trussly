@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
 import { summarizeBudget } from "@/lib/budget";
+import { forecastLine, openOrderValue, originalBudget, poTotal } from "@/lib/commercial";
 import { balanceOf, paidOf } from "@/lib/status";
 import { Badge, Button, Card, CardHeader, Field, Input, Progress, Select, Stat } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
@@ -20,7 +21,11 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const project = await getProjectForUser(user, id);
   const currency = user.company.currency;
   const threshold = user.company.approvalThreshold;
-  const lines = await db.budgetLine.findMany({ where: { projectId: project.id }, include: { expenses: true }, orderBy: { category: "asc" } });
+  const lines = await db.budgetLine.findMany({
+    where: { projectId: project.id },
+    include: { expenses: true, changeOrders: true, purchases: { where: { status: { not: "CANCELLED" } }, include: { items: true, invoices: true } } },
+    orderBy: { category: "asc" },
+  });
   const expenses = await db.expense.findMany({
     where: { budgetLine: { projectId: project.id } },
     include: invoiceInclude,
@@ -33,20 +38,35 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const paid = expenses.reduce((s, e) => s + paidOf(e), 0);
   const owed = expenses.filter((e) => e.status === "APPROVED" || e.status === "PROCESSING").reduce((s, e) => s + balanceOf(e), 0);
   const b = summarizeBudget(lines);
+  // Forecast: approved spend + invoices in review + orders placed but not yet invoiced.
+  const forecasts = new Map(
+    lines.map((l) => {
+      const sum = b.lines.find((x) => x.id === l.id)!;
+      const openOrders = l.purchases.reduce((s, po) => s + openOrderValue(poTotal(po.items), po.invoices.filter((i) => i.status !== "REJECTED").reduce((t, i) => t + i.amount, 0)), 0);
+      return [l.id, { ...forecastLine({ revised: l.budgeted, committed: sum.spent, inReview: sum.pending, openOrders }), openOrders, original: originalBudget(l.budgeted, l.changeOrders) }];
+    }),
+  );
+  const forecastTotal = [...forecasts.values()].reduce((s, f) => s + f.forecast, 0);
+  const originalTotal = [...forecasts.values()].reduce((s, f) => s + f.original, 0);
   const manage = can.manageProject(user.role);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Budget" value={formatMoney(b.budgeted, currency)} />
+        <Stat label="Revised budget" value={formatMoney(b.budgeted, currency)} sub={b.budgeted !== originalTotal ? `${formatMoney(originalTotal, currency)} original` : "No approved changes"} />
         <Stat label="Approved spend" value={formatMoney(b.spent, currency)} sub={`${Math.round(b.ratio * 100)}% used`} tone={b.ratio > 1 ? "bad" : b.ratio >= 0.9 ? "warn" : undefined} />
         <Stat label="Paid" value={formatMoney(paid, currency)} sub={`${formatMoney(owed, currency)} approved, not yet paid`} />
-        <Stat label="Remaining" value={formatMoney(b.budgeted - b.spent, currency)} sub={`${formatMoney(b.pending, currency)} in review`} tone={b.budgeted - b.spent < 0 ? "bad" : undefined} />
+        <Stat
+          label="Forecast final cost"
+          value={formatMoney(forecastTotal, currency)}
+          sub={forecastTotal > b.budgeted ? `${formatMoney(forecastTotal - b.budgeted, currency)} over budget` : "On budget, no lines forecast over"}
+          tone={forecastTotal > b.budgeted ? "bad" : "ok"}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Budget lines" subtitle="Lines turn amber at 90% and red over 100%." />
+          <CardHeader title="Budget lines" subtitle="Lines turn amber at 90% and red over 100%. Forecast is the budget, or the known cost (approved + in review + on order) where that is higher." />
           <div className="divide-y divide-line">
             {b.lines.map((l) => (
               <div key={l.id} className="px-5 py-4">
@@ -62,7 +82,17 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
                 <div className="mt-2">
                   <Progress value={l.ratio * 100} tone={l.state === "over" ? "bad" : l.state === "warning" ? "warn" : "ok"} />
                 </div>
-                {l.pending > 0 && <p className="mt-1 text-xs text-muted">{formatMoney(l.pending, currency)} awaiting approval</p>}
+                {(() => {
+                  const f = forecasts.get(l.id)!;
+                  return (
+                    <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted">
+                      {l.pending > 0 && <span>{formatMoney(l.pending, currency)} in review</span>}
+                      {f.openOrders > 0 && <span>{formatMoney(f.openOrders, currency)} on order</span>}
+                      {f.original !== l.budgeted && <span>{formatMoney(l.budgeted - f.original, currency)} from change orders</span>}
+                      <span className={f.over ? "font-medium text-bad" : ""}>Known cost {formatMoney(f.known, currency)}{f.over ? `, forecast ${formatMoney(-f.variance, currency)} over` : ""}</span>
+                    </p>
+                  );
+                })()}
                 {manage && (
                   <details className="mt-2 text-xs">
                     <summary className="cursor-pointer text-muted hover:text-ink">Adjust budget</summary>

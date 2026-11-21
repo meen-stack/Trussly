@@ -20,11 +20,11 @@ Open the [live demo](https://gettrussly.vercel.app) or run it locally (below), t
 
 | Role | Person | What to try |
 | --- | --- | --- |
-| Owner | Olivia | Give final approval on $180,000 of work, approve an invoice over the $10,000 limit |
-| Project manager | Marcus | Approve inspected electrical work, review today's report, approve invoices |
-| Site supervisor | Sam | Inspect the level 2 slab, file a daily report from a phone with photos |
-| Contractor | Carla | Fix and resubmit the roof work, submit work with photos, invoice for verified work |
-| Accountant | Fiona | Pay an overdue invoice, record a partial payment, check the financial report |
+| Owner | Olivia | Give final approval on $180,000 of work, approve and sign the $64,000 solar change order, approve a purchase order, settle the escalated crane dispute, open Analytics |
+| Project manager | Marcus | Approve inspected electrical work, decide the RFI-14 change order, raise a purchase order, reply to Carla in Messages |
+| Site supervisor | Sam | Inspect the level 2 slab, file a daily report from a phone, receive a cable delivery and log material use |
+| Contractor | Carla | Submit work with photos, invoice for verified work, propose a change order, raise a dispute, chat with the team |
+| Accountant | Fiona | Pay an overdue invoice, record a partial payment, see an invoice on hold because of a dispute |
 
 All demo accounts use the password `trussly-demo`.
 
@@ -51,9 +51,16 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 - **Daily site reports:** weather, workforce, work done, challenges, materials received, equipment used, site incidents, supervisor remarks and photos tagged with GPS location. Mobile-first, with the camera opening directly.
 - **Dashboards for each role:** owners see the portfolio, budget warnings and approvals. Supervisors see inspections and today's reports. Contractors see their work, invoices and what they're owed. Accountants see payments due and overdue.
 - **Budget against actual:** lines turn amber at 90% and red past 100%, and crossing a threshold sends an alert.
-- **Forecast final cost:** committed spend divided by site-reported progress, compared with a straight-line schedule to flag projects that are behind.
+- **Change orders:** anyone on the commercial side proposes a priced change with a reason and schedule impact. The manager approves up to the limit and the owner above it, by typing their name as a signature. Approval moves the budget line, the work value and the end date, and the original budget is always shown next to the revised one.
+- **Purchase orders and materials:** orders over the limit wait for the owner. The supervisor logs deliveries against each order, and stock on site is delivered minus used, with a low-stock alert at each material's reorder level.
+- **Expense forecasting:** each budget line's known cost is approved invoices plus invoices in review plus orders not yet invoiced. The forecast is the revised budget, or the known cost where that is higher, so real overruns show up before the invoices arrive.
+- **Documents and digital signatures:** drawings, contracts, permits and reports by category, with versions kept when the same title is uploaded again. Documents can require signatures from chosen roles. Each signature records the typed name, role, time and a SHA-256 fingerprint of the file, version and signer.
+- **Contractor ratings:** verified work is rated 1 to 5 for quality, timeliness and safety. Scorecards show on the Team page and in Analytics, next to how much work was verified on time.
+- **Disputes:** raised on work, an invoice or in general, with a message thread. The manager resolves them, or they're escalated to the owner. A disputed invoice can't be paid until the dispute is resolved.
+- **Messages:** direct chats, named group chats with anyone in the company, a company-wide chat and a thread for every project. Unread counts show in the nav, and direct and group messages also notify by email.
+- **Analytics across projects:** spend by month (approved against paid), cost variance per project, change orders, open disputes, the average days from approval to payment and a contractor scorecard.
 - **Notifications:** in-app and by email (through Resend) for work submitted, inspection requests, approvals, corrections, new invoices, invoice approvals, payments, budget alerts, deadlines coming up and overdue work and invoices.
-- **Photo timeline and audit trail:** every photo by day, and every approval, rejection, payment and budget change with who did it and when.
+- **Photo timeline and audit trail:** every photo by day, and every approval, rejection, signature, payment and budget change with who did it and when. The audit trail filters by type, person, date and text, and exports to CSV.
 - **Accounts:** sign-up creates a company, owners invite people by role, and users can reset their password by email.
 
 | | |
@@ -61,9 +68,12 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Project overview](docs/screenshots/project-overview.png) |
 | ![Work verification](docs/screenshots/milestones.png) | ![Budget and spend](docs/screenshots/budget.png) |
 | ![Finance](docs/screenshots/finance.png) | ![Contractor dashboard](docs/screenshots/contractor-dashboard.png) |
+| ![Change orders](docs/screenshots/change-orders.png) | ![Materials and purchase orders](docs/screenshots/materials.png) |
+| ![Documents and signatures](docs/screenshots/documents.png) | ![Disputes](docs/screenshots/disputes.png) |
+| ![Analytics](docs/screenshots/analytics.png) | ![Messages](docs/screenshots/chat.png) |
 | ![Product tour](docs/screenshots/about.png) | ![Photo timeline](docs/screenshots/photos.png) |
 
-<p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"></p>
+<p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"> <img src="docs/screenshots/mobile-chat.png" alt="A direct chat on a phone" width="300"></p>
 
 ## Roles and permissions
 
@@ -80,6 +90,12 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 | Submit invoices | | | ✓ | ✓ | ✓ | |
 | Approve invoices | | over limit | ✓ | | | |
 | Record and refuse payments | ✓ | | | | | ✓ |
+| Propose change orders | | ✓ | ✓ | | ✓ | |
+| Approve change orders and purchase orders | | over limit | ✓ | | | |
+| Receive deliveries, log material use | | | ✓ | ✓ | | |
+| Rate contractors | | ✓ | ✓ | ✓ | | |
+| Resolve disputes | ✓ | ✓ | ✓ (until escalated) | | | |
+| Analytics | ✓ | ✓ | ✓ | | | ✓ |
 | Finance page | ✓ | ✓ | ✓ | | | ✓ |
 | Invite people, company settings | ✓ | ✓ | | | | |
 
@@ -102,12 +118,13 @@ The rules live in [`src/lib/permissions.ts`](src/lib/permissions.ts). The work a
 
 ```
 prisma/
-  schema.prisma        companies, users, projects, budget lines, work, reports, photos, invoices, payments, notifications, audit events
+  schema.prisma        companies, users, projects, budget lines, work, reports, photos, invoices, payments, change orders,
+                       purchase orders, materials, documents, signatures, ratings, disputes, chats, notifications, audit events
   seed.ts              demo company with dates relative to today
 src/
   app/
     (auth)/            login, sign-up, password reset, invites
-    (app)/             dashboard, projects, approvals, notifications, team, settings
+    (app)/             dashboard, projects, approvals, messages, analytics, finance, notifications, team, settings
     actions/           server actions for every workflow
     api/cron/          daily missing-report alert
   components/          UI kit, charts, forms
@@ -115,10 +132,13 @@ src/
     budget.ts          budget, forecast and schedule maths (pure, unit tested)
     workflow.ts        work and invoice state machines (pure, unit tested)
     status.ts          payment and work statuses worked out from the data
+    commercial.ts      change orders, purchase orders, stock, forecasting, ratings, disputes, signatures (pure, unit tested)
+    messages.ts        chats, membership and unread counts
     permissions.ts     role rules
 tests/
   unit/                Vitest
-  e2e/                 Playwright: report, work verification, invoice, payment, roles, sign-up flows
+  e2e/                 Playwright: reports, work verification, invoices, payments, change orders, deliveries,
+                       signatures, disputes, messages, analytics, roles, sign-up
 ```
 
 ## Running locally
@@ -155,12 +175,10 @@ The end-to-end suite reseeds the demo company before it runs.
 
 ## Roadmap
 
-- Change orders and purchase orders
-- Document management and digital signatures
-- Contractor performance ratings and disputes
 - Retention release at handover
+- Real-time chat over websockets (messages refresh every few seconds today)
+- Signatures tied to a named person as well as a role
 - Weekly PDF report for owners
-- Material procurement and delivery tracking
 - Offline drafts for sites with poor signal
 - Reading invoice amounts from uploaded PDFs
 

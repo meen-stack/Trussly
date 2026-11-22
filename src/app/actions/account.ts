@@ -9,6 +9,9 @@ import type { Role } from "@prisma/client";
 import { DELEGABLE_ROLES } from "@/lib/release";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { audit } from "@/lib/notify";
+import { format } from "date-fns";
+import { NAME_WINDOW_DAYS, nameChangeAllowed } from "@/lib/names";
+import { filesFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
 
 export async function markAllRead() {
@@ -32,12 +35,53 @@ export async function updateCompany(_: FormState, form: FormData): Promise<FormS
   if (!parsed.success) return { error: "Check the fields and try again." };
   const threshold = parseMoney(parsed.data.threshold);
   if (threshold === null) return { error: "Enter the approval limit as a number." };
-  await db.company.update({
-    where: { id: user.companyId },
-    data: { name: parsed.data.name, currency: parsed.data.currency, approvalThreshold: threshold },
-  });
+  const name = parsed.data.name.trim().replace(/\s+/g, " ");
+  const renamed = name !== user.company.name;
+  if (renamed) {
+    const check = await canRename("COMPANY", user.companyId);
+    if (!check.ok) return { error: `The company name can change twice in 20 days. Next change: ${format(check.nextAt, "MMM d, h:mm a")}.` };
+  }
+  let logoUrl: string | undefined;
+  const logo = filesFrom(form, "logo")[0];
+  if (logo) {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(logo.type)) return { error: "Use a PNG, JPG or WebP logo." };
+    if (logo.size > 2 * 1024 * 1024) return { error: "Keep the logo under 2 MB." };
+    logoUrl = await storeFile(logo, `companies/${user.companyId}`);
+  }
+  await db.$transaction([
+    db.company.update({
+      where: { id: user.companyId },
+      data: { name, currency: parsed.data.currency, approvalThreshold: threshold, ...(logoUrl && { logoUrl }), ...(form.get("removeLogo") === "on" && !logoUrl && { logoUrl: null }) },
+    }),
+    ...(renamed ? [db.nameChange.create({ data: { subjectType: "COMPANY", subjectId: user.companyId, fromName: user.company.name, toName: name, changedById: user.id } })] : []),
+  ]);
+  if (renamed) await audit(user.id, `renamed the company from "${user.company.name}" to "${name}"`, "Company", user.companyId);
+  if (logoUrl) await audit(user.id, "changed the company logo", "Company", user.companyId);
   revalidatePath("/", "layout");
   return { success: "Settings saved." };
+}
+
+async function canRename(subjectType: "USER" | "COMPANY", subjectId: string) {
+  const since = new Date(Date.now() - NAME_WINDOW_DAYS * 864e5);
+  const recent = await db.nameChange.findMany({ where: { subjectType, subjectId, createdAt: { gt: since } }, select: { createdAt: true } });
+  return nameChangeAllowed(recent.map((r) => r.createdAt));
+}
+
+/** Changes your own name. At most twice in any 20 days, so signatures and records stay recognisable. */
+export async function updateMyName(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const name = String(form.get("name") ?? "").trim().replace(/\s+/g, " ");
+  if (name.length < 2 || name.length > 80) return { error: "Enter your full name." };
+  if (name === user.name) return { error: "That's already your name." };
+  const check = await canRename("USER", user.id);
+  if (!check.ok) return { error: `You can change your name twice in 20 days. Next change: ${format(check.nextAt, "MMM d, h:mm a")}.` };
+  await db.$transaction([
+    db.user.update({ where: { id: user.id }, data: { name } }),
+    db.nameChange.create({ data: { subjectType: "USER", subjectId: user.id, fromName: user.name, toName: name, changedById: user.id } }),
+  ]);
+  await audit(user.id, `changed their name from "${user.name}" to "${name}"`, "User", user.id);
+  revalidatePath("/", "layout");
+  return { success: check.left > 1 ? "Name changed. You can change it once more in the next 20 days." : "Name changed." };
 }
 
 /** Owner only: the amount that needs two people, and which roles can sign in the owner's place. */

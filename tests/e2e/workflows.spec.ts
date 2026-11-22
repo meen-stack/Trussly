@@ -233,3 +233,26 @@ test("delegation: the owner lets the accountant sign in their place", async ({ p
   await page.getByRole("button", { name: "Save approvals" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
 });
+
+test("names: change twice in 20 days, then wait", async ({ page }) => {
+  await loginAs(page, "SUPERVISOR");
+  await page.goto("/settings");
+  await page.getByText("Change your name").click();
+  await page.locator('input[name="name"]').fill("Sam Okafor Jr");
+  await page.getByRole("button", { name: "Change name" }).click();
+  await expect(page.getByText("Name changed. You can change it once more in the next 20 days.")).toBeVisible();
+  await page.locator('input[name="name"]').fill("Sam Okafor");
+  await page.getByRole("button", { name: "Change name" }).click();
+  await expect(page.getByText(/You've changed your name twice in 20 days\. You can change it again on/)).toBeVisible();
+  await expect(page.locator("dd", { hasText: /^Sam Okafor$/ })).toBeVisible();
+});
+
+test("logo: the owner uploads a company logo for emails", async ({ page }) => {
+  await loginAs(page, "OWNER");
+  await page.goto("/settings");
+  await page.locator('input[name="logo"]').setInputFiles(PHOTO);
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText("Settings saved.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("Use the Trussly logo instead")).toBeVisible();
+});

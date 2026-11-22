@@ -56,15 +56,14 @@ export async function logout() {
 export async function forgotPassword(_: FormState, form: FormData): Promise<FormState> {
   const parsed = email.safeParse(form.get("email"));
   if (!parsed.success) return { error: "Enter a valid email." };
-  const user = await db.user.findUnique({ where: { email: parsed.data } });
+  const user = await db.user.findUnique({ where: { email: parsed.data }, include: { company: true } });
   if (user) {
     const token = randomBytes(24).toString("hex");
     await db.passwordReset.create({ data: { token, userId: user.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
-    await sendEmail(
-      user.email,
-      "Reset your Trussly password",
-      `Someone asked to reset your password. This link works for one hour:\n\n${appUrl(`/reset-password/${token}`)}\n\nIf it wasn't you, ignore this email.`,
-    );
+    await sendEmail(user.email, "Reset your password", "Someone asked to reset your Trussly password. The link works for one hour. If it wasn't you, ignore this email.", {
+      brand: user.company,
+      action: { label: "Reset password", url: appUrl(`/reset-password/${token}`) },
+    });
   }
   // Same answer either way so the form can't be used to check which emails exist.
   return { success: "If that email has an account, a reset link is on its way." };
@@ -96,18 +95,16 @@ export async function inviteUser(_: FormState, form: FormData): Promise<FormStat
     data: { email: parsed.data.email, role: parsed.data.role as Role, token, companyId: me.companyId, expiresAt: new Date(Date.now() + 7 * 864e5) },
   });
   revalidatePath("/team");
-  const result = await emailInvite(parsed.data.email, token, me.name, me.company.name);
+  const result = await emailInvite(parsed.data.email, token, me.name, me.company);
   if (result.sent) return { success: `Invite emailed to ${parsed.data.email}.` };
   return { error: `Invite made, but the email didn't send (${result.reason}). Copy the link under Pending invites and send it yourself.` };
 }
 
-function emailInvite(to: string, token: string, from: string, company: string) {
-  const link = appUrl(`/invite/${token}`);
-  return sendEmail(
-    to,
-    `${from} invited you to ${company} on Trussly`,
-    `${from} invited you to join ${company} on Trussly.\n\nJoin here (valid for 7 days):\n${link}`,
-  );
+function emailInvite(to: string, token: string, from: string, company: { name: string; logoUrl: string | null }) {
+  return sendEmail(to, `Join ${company.name} on Trussly`, `${from} invited you to join ${company.name}. The link works for 7 days.`, {
+    brand: company,
+    action: { label: "Join the team", url: appUrl(`/invite/${token}`) },
+  });
 }
 
 /** Emails a pending invite again, with a fresh 7 days. */
@@ -118,7 +115,7 @@ export async function resendInvite(_: FormState, form: FormData): Promise<FormSt
   if (!invite) return { error: "That invite was already used." };
   await db.invite.update({ where: { id: invite.id }, data: { expiresAt: new Date(Date.now() + 7 * 864e5) } });
   revalidatePath("/team");
-  const result = await emailInvite(invite.email, invite.token, me.name, me.company.name);
+  const result = await emailInvite(invite.email, invite.token, me.name, me.company);
   return result.sent ? { success: "Sent" } : { error: `Not sent: ${result.reason}` };
 }
 

@@ -10,9 +10,9 @@ export async function notifyUsers(userIds: string[], note: Note) {
   const unique = [...new Set(userIds)];
   if (unique.length === 0) return;
   await db.notification.createMany({ data: unique.map((userId) => ({ userId, ...note })) });
-  const users = await db.user.findMany({ where: { id: { in: unique } }, select: { email: true } });
+  const users = await db.user.findMany({ where: { id: { in: unique } }, select: { email: true, company: { select: { name: true, logoUrl: true } } } });
   await Promise.all(
-    users.map((u) => sendEmail(u.email, note.title, `${note.body}${note.href ? `\n\nOpen: ${appUrl(note.href)}` : ""}`)),
+    users.map((u) => sendEmail(u.email, note.title, note.body, { brand: u.company, ...(note.href && { action: { label: "Open in Trussly", url: appUrl(note.href) } }) })),
   );
 }
 

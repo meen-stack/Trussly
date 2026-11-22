@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth";
 import { Card, Field, Input, PageHeader, Select } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
-import { updateApprovals, updateCompany } from "@/app/actions/account";
+import { updateApprovals, updateCompany, updateMyName } from "@/app/actions/account";
+import { format } from "date-fns";
+import { renameStatus } from "@/lib/name-limits";
 import { DELEGABLE_ROLES } from "@/lib/release";
 import { ROLE_LABEL } from "@/lib/permissions";
 
@@ -12,6 +14,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   const c = user.company;
   const editable = user.role === "OWNER" || user.role === "ADMIN";
+  const { me: myRename, company: companyRename } = await renameStatus(user.id, c.id);
   return (
     <>
       <PageHeader title="Settings" />
@@ -32,6 +35,20 @@ export default async function SettingsPage() {
               <dd className="font-medium">{ROLE_LABEL[user.role]}</dd>
             </div>
           </dl>
+          <details className="group mt-4 border-t border-line pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-brand-text">Change your name</summary>
+            <div className="mt-3">
+              {myRename.ok ? (
+                <ActionForm action={updateMyName} submitLabel="Change name">
+                  <Field label="Full name" hint={`${myRename.left} change${myRename.left === 1 ? "" : "s"} left in the next 20 days.`}>
+                    <Input name="name" defaultValue={user.name} required />
+                  </Field>
+                </ActionForm>
+              ) : (
+                <p className="text-sm text-muted">You&apos;ve changed your name twice in 20 days. You can change it again on {format(myRename.nextAt, "MMM d")}.</p>
+              )}
+            </div>
+          </details>
         </Card>
         {user.role === "OWNER" && (
           <Card className="p-6">
@@ -58,9 +75,21 @@ export default async function SettingsPage() {
           <h2 className="font-display mb-4 font-semibold">Company</h2>
           {editable ? (
             <ActionForm action={updateCompany} submitLabel="Save settings">
-              <Field label="Company name">
-                <Input name="name" defaultValue={c.name} required />
+              <Field label="Company name" hint={companyRename.ok ? undefined : `Can change again on ${format(companyRename.nextAt, "MMM d")}.`}>
+                <Input name="name" defaultValue={c.name} required readOnly={!companyRename.ok} />
               </Field>
+              <Field label="Logo on emails">
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.logoUrl ?? "/brand/trussly-logo.png"} alt="" className="h-12 w-12 shrink-0 rounded-lg border border-line object-contain" />
+                  <Input name="logo" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Company logo" />
+                </div>
+              </Field>
+              {c.logoUrl && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="removeLogo" className="accent-[#ffc107]" /> Use the Trussly logo instead
+                </label>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Currency">
                   <Select name="currency" defaultValue={c.currency}>

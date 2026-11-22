@@ -54,6 +54,8 @@ async function main() {
     console.log("Demo company already exists, skipping seed.");
     return;
   }
+  const demoUsers = await db.user.findMany({ where: { email: { endsWith: "@demo.trussly.app" } }, select: { id: true } });
+  await db.nameChange.deleteMany({ where: { changedById: { in: demoUsers.map((u) => u.id) } } });
   // Projects first: deleting them cascades reports and invoices, which reference users.
   await db.project.deleteMany({ where: { company: { name: "Northline Developments" } } });
   await db.company.deleteMany({ where: { name: "Northline Developments" } });

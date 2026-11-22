@@ -50,7 +50,7 @@ async function main() {
   // On deploys we only seed once, so visitors' changes aren't wiped by every build.
   // Checking the newest demo account (not just the company) means deploys that add demo data reseed once.
   // Bump this marker account when new demo data must reseed on deploy.
-  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: "jonah@demo.trussly.app" } }))) {
+  if (process.argv.includes("--if-missing") && (await db.user.findUnique({ where: { email: "priya@demo.trussly.app" } }))) {
     console.log("Demo company already exists, skipping seed.");
     return;
   }
@@ -72,6 +72,7 @@ async function main() {
   const ruth = await mk("Ruth Alvarez", "CONTRACTOR", "ruth@demo.trussly.app", "Alvarez Electrical");
   const fiona = await mk("Fiona Reyes", "FINANCE", DEMO_EMAILS.FINANCE, "Finance Officer");
   const jonah = await mk("Jonah Price", "CONTRACTOR", "jonah@demo.trussly.app", "Price Roofing Co.");
+  const priya = await mk("Priya Shah", "SUPERVISOR", "priya@demo.trussly.app", "Site Supervisor");
 
   // Work items: title, deadline (days from today), value, work status, assignee, invoice, notes.
   type Inv = { status: ExpenseStatus; paidShare?: number; dueIn?: number; note?: string };
@@ -89,6 +90,8 @@ async function main() {
     supervisor: User;
     contractors: User[];
     reportDays: number;
+    reportOffset?: number; // reports stop this many days ago (finished projects)
+    status?: "ACTIVE" | "COMPLETED";
     skipToday: boolean;
     work: Work[];
     extra: [string, string, string, number, ExpenseStatus, User, string?][]; // line, vendor, description, dollars, status, submitter, note
@@ -196,6 +199,35 @@ async function main() {
       ],
       extra: [],
     },
+    {
+      name: "Cedar Park Dental Clinic",
+      location: "Cedar Park, TX",
+      description: "Fit-out of a 6-chair dental clinic in an existing retail unit. Handed over to the client.",
+      start: 150,
+      end: -12,
+      floors: 1,
+      progress: 100,
+      budget: 640_000,
+      lines: [
+        ["Site preparation", 0.05, 0.96],
+        ["Structure", 0.12, 0.98],
+        ["MEP", 0.34, 0.97],
+        ["Finishes", 0.41, 0.95],
+        ["Contingency", 0.08, 0.4],
+      ],
+      supervisor: priya,
+      contractors: [carla, ruth],
+      reportDays: 20,
+      reportOffset: 12,
+      status: "COMPLETED",
+      skipToday: true,
+      work: [
+        { title: "Strip-out and new partitions", due: -120, value: 70_000, status: "VERIFIED", who: carla, line: "Structure", inv: { status: "PAID", paidShare: 1 } },
+        { title: "Plumbing, medical gas and electrics", due: -60, value: 210_000, status: "VERIFIED", who: ruth, line: "MEP", inv: { status: "PAID", paidShare: 1 } },
+        { title: "Finishes and joinery", due: -20, value: 240_000, status: "VERIFIED", who: carla, line: "Finishes", inv: { status: "PAID", paidShare: 1 } },
+      ],
+      extra: [],
+    },
   ];
 
   const VENDOR_OF = (u: User) => u.title ?? u.name;
@@ -214,6 +246,7 @@ async function main() {
         endDate,
         companyId: company.id,
         coverUrl: art(Math.min(s.progress + 10, 100), s.floors, "Sunny"),
+        status: s.status ?? "ACTIVE",
         members: { create: [marcus, s.supervisor, ...s.contractors].map((u) => ({ userId: u.id })) },
       },
     });
@@ -224,7 +257,7 @@ async function main() {
     // Daily reports: Monday to Saturday, progress rising to today's figure.
     const days: Date[] = [];
     for (let d = s.reportDays; d >= (s.skipToday ? 1 : 0); d--) {
-      const date = daysAgo(d);
+      const date = daysAgo(d + (s.reportOffset ?? 0));
       if (date.getUTCDay() !== 0) days.push(date);
     }
     const startProgress = Math.max(0, s.progress - Math.round(s.reportDays * (s.progress / Math.max(s.start, 1)) * 1.1));
@@ -521,19 +554,19 @@ async function seedAdvanced(x: People) {
   }
 
   // ---- Documents and signatures ----
-  type Doc = { p: { id: string }; title: string; cat: DocumentCategory; file: string; v?: number; by: User; ago: number; signers?: Role[]; signed?: [User, number][] };
+  type Doc = { p: { id: string }; title: string; cat: DocumentCategory; file: string; v?: number; by: User; ago: number; signers?: User[]; signed?: [User, number][] };
   const docs: Doc[] = [
     { p: hv, title: "Structural drawings", cat: "DRAWING", file: "structural-drawings-v1.pdf", by: marcus, ago: 135 },
     { p: hv, title: "Structural drawings", cat: "DRAWING", file: "structural-drawings-v2.pdf", v: 2, by: marcus, ago: 4 },
-    { p: hv, title: "Subcontract: Mendes Structural", cat: "CONTRACT", file: "main-contract-mendes.pdf", by: marcus, ago: 132, signers: ["OWNER", "CONTRACTOR"], signed: [[olivia, 131], [carla, 130]] },
-    { p: hv, title: "Subcontract: Alvarez Electrical", cat: "CONTRACT", file: "electrical-subcontract-alvarez.pdf", by: marcus, ago: 3, signers: ["OWNER", "MANAGER", "CONTRACTOR"], signed: [[marcus, 3]] },
+    { p: hv, title: "Subcontract: Mendes Structural", cat: "CONTRACT", file: "main-contract-mendes.pdf", by: marcus, ago: 132, signers: [olivia, carla], signed: [[olivia, 131], [carla, 130]] },
+    { p: hv, title: "Subcontract: Alvarez Electrical", cat: "CONTRACT", file: "electrical-subcontract-alvarez.pdf", by: marcus, ago: 3, signers: [olivia, marcus, ruth], signed: [[marcus, 3]] },
     { p: hv, title: "Building permit BP-2026-0418", cat: "PERMIT", file: "building-permit.pdf", by: marcus, ago: 138 },
-    { p: rv, title: "Main contract", cat: "CONTRACT", file: "riverside-contract.pdf", by: olivia, ago: 208, signers: ["OWNER", "MANAGER"], signed: [[olivia, 207], [marcus, 207]] },
+    { p: rv, title: "Main contract", cat: "CONTRACT", file: "riverside-contract.pdf", by: olivia, ago: 208, signers: [olivia, marcus], signed: [[olivia, 207], [marcus, 207]] },
     { p: rv, title: "Fire strategy report", cat: "REPORT", file: "fire-strategy.pdf", by: marcus, ago: 41 },
   ];
   for (const d of docs) {
     const createdAt = at(daysAgo(d.ago), 10);
-    const doc = await db.document.create({ data: { projectId: d.p.id, title: d.title, category: d.cat, url: `/demo/docs/${d.file}`, fileName: d.file, version: d.v ?? 1, signerRoles: d.signers ?? [], uploadedById: d.by.id, createdAt } });
+    const doc = await db.document.create({ data: { projectId: d.p.id, title: d.title, category: d.cat, url: `/demo/docs/${d.file}`, fileName: d.file, version: d.v ?? 1, signerIds: (d.signers ?? []).map((u) => u.id), uploadedById: d.by.id, createdAt } });
     await log(d.p.id, d.by.id, `uploaded "${d.title}"${d.v ? ` (version ${d.v})` : ""}`, "Document", doc.id, createdAt);
     for (const [u, ago] of d.signed ?? []) {
       const signedAt = at(daysAgo(ago), 14);

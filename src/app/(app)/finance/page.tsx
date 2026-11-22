@@ -29,7 +29,7 @@ export default async function FinancePage() {
   const outstanding = owing.reduce((s, e) => s + balanceOf(e), 0);
   const payments = invoices.flatMap((e) => e.payments.map((p) => ({ ...p, invoice: e }))).sort((a, b) => b.paidAt.getTime() - a.paidAt.getTime());
   const paidThisMonth = payments.filter((p) => p.paidAt >= startOfMonth(today)).reduce((s, p) => s + p.amount, 0);
-  const retention = invoices.filter((e) => COMMITTED.includes(e.status)).reduce((s, e) => s + e.retention, 0);
+  const retention = invoices.filter((e) => COMMITTED.includes(e.status) && !e.retentionReleasedAt).reduce((s, e) => s + e.retention, 0);
   const inReview = invoices.filter((e) => e.status === "SUBMITTED" || e.status === "OWNER_REVIEW");
   const refused = invoices.filter((e) => e.status === "PAYMENT_REJECTED");
 
@@ -42,7 +42,7 @@ export default async function FinancePage() {
       committed: committed.reduce((s, e) => s + e.amount, 0),
       paid: mine.reduce((s, e) => s + paidOf(e), 0),
       outstanding: committed.filter((e) => e.status !== "PAID").reduce((s, e) => s + Math.max(balanceOf(e), 0), 0),
-      retention: committed.reduce((s, e) => s + e.retention, 0),
+      retention: committed.filter((e) => !e.retentionReleasedAt).reduce((s, e) => s + e.retention, 0),
     };
   });
   const money = (c: number) => formatMoney(c, currency);

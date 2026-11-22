@@ -7,10 +7,10 @@ import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
 import { can } from "@/lib/permissions";
 import { formatMoney, parseMoney } from "@/lib/money";
-import { applyPayment, nextInvoiceStatus, retentionFor, type InvoiceAction } from "@/lib/workflow";
+import { applyPayment, nextInvoiceStatus, payable, retentionFor, statusAfterRelease, type InvoiceAction } from "@/lib/workflow";
 import { summarizeLine, WARN_AT } from "@/lib/budget";
 import { paidOf } from "@/lib/status";
-import { blocksPayment } from "@/lib/commercial";
+import { blocksPayment, canReleaseRetention, retentionHeld } from "@/lib/commercial";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { filesFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
@@ -187,10 +187,36 @@ export async function payExpense(projectId: string, expenseId: string, _: FormSt
     await audit(user.id, `paid ${money(amount!)} to ${expense.vendor}${full ? " (paid in full)" : ""}`, "Expense", expense.id, project.id, reference ? { reference } : undefined);
     await notifyUsers([expense.submitterId], {
       title: `Payment ${full ? "confirmed" : "received"}: ${money(amount!)}`,
-      body: `${expense.vendor}${reference ? `, ref ${reference}` : ""}. ${full ? "This invoice is fully paid." : `Balance remaining: ${money(expense.amount - expense.retention - paidOf(expense) - amount!)}.`}`,
+      body: `${expense.vendor}${reference ? `, ref ${reference}` : ""}. ${full ? "This invoice is fully paid." : `Balance remaining: ${money(payable(expense) - paidOf(expense) - amount!)}.`}`,
       href,
     });
   }
   refresh(project.id);
   return { success: "Saved." };
+}
+
+/** Handover: release the retention held on this project's invoices, so finance can pay it. */
+export async function releaseRetention(projectId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const project = await getProjectForUser(user, projectId);
+  if (!canReleaseRetention(user.role, project.status)) return { error: project.status === "COMPLETED" ? "Only the owner or manager can release retention." : "Retention is released at handover. Mark the project completed first." };
+  if (form.get("confirm") !== "on") return { error: "Tick the box to confirm handover." };
+  const invoices = retentionHeld(await db.expense.findMany({ where: { budgetLine: { projectId: project.id } } }));
+  if (invoices.length === 0) return { error: "No retention is held on this project." };
+  const now = new Date();
+  const due = new Date(now.getTime() + user.company.paymentTermsDays * DAY);
+  await db.$transaction(
+    invoices.map((e) => db.expense.update({ where: { id: e.id }, data: { retentionReleasedAt: now, retentionReleasedById: user.id, status: statusAfterRelease(e.status), dueDate: e.status === "PAID" ? due : e.dueDate } })),
+  );
+  const total = invoices.reduce((s, e) => s + e.retention, 0);
+  const money = (c: number) => formatMoney(c, user.company.currency);
+  await audit(user.id, `released ${money(total)} of retention on ${invoices.length} invoice${invoices.length === 1 ? "" : "s"} at handover`, "Project", project.id, project.id);
+  const bySubmitter = new Map<string, number>();
+  for (const e of invoices) bySubmitter.set(e.submitterId, (bySubmitter.get(e.submitterId) ?? 0) + e.retention);
+  for (const [id, amount] of bySubmitter) {
+    await notifyUsers([id], { title: `Retention released: ${money(amount)}`, body: `${project.name} has been handed over. Finance will pay the retention held on your invoices.`, href: `/projects/${project.id}/budget` });
+  }
+  await notifyProjectRoles(project.id, ["FINANCE"], { title: `Retention to pay: ${money(total)}`, body: `${user.name} released retention on ${project.name} at handover.`, href: "/finance" });
+  refresh(project.id);
+  return { success: `Released ${money(total)}. Finance can now pay it.` };
 }

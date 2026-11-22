@@ -47,8 +47,35 @@ test("documents: owner signs a contract", async ({ page }) => {
   await doc.locator('input[name="signature"]').fill("Olivia Bennett");
   await doc.locator('input[name="agree"]').check();
   await doc.getByRole("button", { name: "Sign document" }).click();
-  await expect(doc.getByText("Awaiting Contractor")).toBeVisible();
+  await expect(doc.getByText("Awaiting Ruth Alvarez")).toBeVisible();
   await expect(doc.locator(".font-display", { hasText: "Olivia Bennett" })).toBeVisible();
+});
+
+test("documents: only the named contractor can sign", async ({ page }) => {
+  await loginAs(page, "CONTRACTOR");
+  await openProject(page, PROJECT, "Documents");
+  const doc = page.locator("div.rounded-xl", { hasText: "Subcontract: Alvarez Electrical" });
+  await expect(doc.getByText("Awaiting")).toBeVisible();
+  await expect(doc.getByRole("button", { name: "Sign document" })).toHaveCount(0);
+});
+
+test("retention: owner releases it at handover, finance pays it", async ({ page }) => {
+  await loginAs(page, "OWNER");
+  await openProject(page, "Cedar Park Dental Clinic", "Budget & spend");
+  await page.getByRole("button", { name: /^Release \$/ }).click();
+  await expect(page.getByText("Tick the box to confirm handover.")).toBeVisible();
+  await page.getByLabel("The project is handed over").check();
+  await page.getByRole("button", { name: /^Release \$/ }).click();
+  await expect(page.getByText(/All retention has been released\./)).toBeVisible();
+  await expect(page.getByText("Retention released · awaiting payment").first()).toBeVisible();
+
+  await loginAs(page, "FINANCE");
+  await page.goto("/finance");
+  const row = page.locator("li", { hasText: "Strip-out and new partitions" }).first();
+  await expect(row.getByText("Retention released · awaiting payment")).toBeVisible();
+  await row.getByRole("button", { name: "Record payment" }).click();
+  await row.getByRole("button", { name: "Record payment" }).click();
+  await expect(page.locator("li", { hasText: "Strip-out and new partitions" }).getByRole("button", { name: "Record payment" })).toHaveCount(0);
 });
 
 test("disputes: a disputed invoice can't be paid", async ({ page }) => {

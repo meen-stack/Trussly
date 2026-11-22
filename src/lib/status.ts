@@ -30,6 +30,7 @@ export type PaymentKey =
   | "AWAITING_PAYMENT"
   | "PROCESSING"
   | "PARTIALLY_PAID"
+  | "RETENTION_DUE"
   | "PAID"
   | "REJECTED"
   | "PAYMENT_REJECTED"
@@ -42,13 +43,14 @@ export const PAYMENT_LABEL: Record<PaymentKey, Label> = {
   AWAITING_PAYMENT: { label: "Approved · awaiting payment", tone: "brand" },
   PROCESSING: { label: "Payment processing", tone: "brand" },
   PARTIALLY_PAID: { label: "Partially paid", tone: "warn" },
+  RETENTION_DUE: { label: "Retention released · awaiting payment", tone: "brand" },
   PAID: { label: "Fully paid", tone: "ok" },
   REJECTED: { label: "Invoice rejected", tone: "bad" },
   PAYMENT_REJECTED: { label: "Payment rejected", tone: "bad" },
   OVERDUE: { label: "Overdue", tone: "bad" },
 };
 
-export type InvoiceLike = { status: ExpenseStatus; amount: number; retention: number; dueDate: Date | null; payments: { amount: number }[] };
+export type InvoiceLike = { status: ExpenseStatus; amount: number; retention: number; retentionReleasedAt?: Date | null; dueDate: Date | null; payments: { amount: number }[] };
 
 export const paidOf = (inv: { payments: { amount: number }[] }) => inv.payments.reduce((s, p) => s + p.amount, 0);
 export const balanceOf = (inv: InvoiceLike) => payable(inv) - paidOf(inv);
@@ -69,6 +71,7 @@ export function paymentKey(inv: InvoiceLike, today = new Date()): PaymentKey {
   }
   // APPROVED or PROCESSING: money is owed.
   if (inv.dueDate && inv.dueDate < today && balanceOf(inv) > 0) return "OVERDUE";
+  if (inv.retentionReleasedAt && paidOf(inv) >= inv.amount - inv.retention) return "RETENTION_DUE";
   if (paidOf(inv) > 0) return "PARTIALLY_PAID";
   return inv.status === "PROCESSING" ? "PROCESSING" : "AWAITING_PAYMENT";
 }
@@ -78,8 +81,9 @@ export function workPaymentKey(invoices: InvoiceLike[], today = new Date()): Pay
   const live = invoices.filter((i) => i.status !== "REJECTED" && i.status !== "PAYMENT_REJECTED");
   if (live.length === 0) return invoices.length ? paymentKey(invoices[invoices.length - 1], today) : "NO_INVOICE";
   const keys = live.map((i) => paymentKey(i, today));
-  const order: PaymentKey[] = ["OVERDUE", "SUBMITTED", "UNDER_REVIEW", "AWAITING_PAYMENT", "PROCESSING", "PARTIALLY_PAID", "PAID"];
+  const order: PaymentKey[] = ["OVERDUE", "SUBMITTED", "UNDER_REVIEW", "AWAITING_PAYMENT", "PROCESSING", "PARTIALLY_PAID", "RETENTION_DUE", "PAID"];
   if (keys.every((k) => k === "PAID")) return "PAID";
-  if (keys.some((k) => k === "PAID" || k === "PARTIALLY_PAID")) return keys.includes("OVERDUE") ? "OVERDUE" : "PARTIALLY_PAID";
+  if (keys.includes("RETENTION_DUE") && keys.every((k) => k === "PAID" || k === "RETENTION_DUE")) return "RETENTION_DUE";
+  if (keys.some((k) => k === "PAID" || k === "PARTIALLY_PAID" || k === "RETENTION_DUE")) return keys.includes("OVERDUE") ? "OVERDUE" : "PARTIALLY_PAID";
   return order.find((k) => keys.includes(k)) ?? "NO_INVOICE";
 }

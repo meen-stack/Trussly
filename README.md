@@ -16,11 +16,11 @@ Trussly lets the people paying for a building see how it's really going without 
 
 ## Try the demo
 
-Open the [live demo](https://gettrussly.vercel.app) or run it locally (below), then pick a role on the front page. No sign-up is needed: the role tiles log you straight in. The product tour lives at `/about`. The seeded company, **Northline Developments**, has three projects in different states: one on track, one at risk and over budget on two lines, and one just starting. Approvals are already waiting for each role.
+Open the [live demo](https://gettrussly.vercel.app) or run it locally (below), then pick a role on the front page. No sign-up is needed: the role tiles log you straight in. The product tour lives at `/about`. The seeded company, **Northline Developments**, has four projects in different states: one on track, one at risk and over budget on two lines, one just starting, and one handed over with retention waiting to be released. Approvals are already waiting for each role.
 
 | Role | Person | What to try |
 | --- | --- | --- |
-| Owner | Olivia | Give final approval on $180,000 of work, approve and sign the $64,000 solar change order, approve a purchase order, settle the escalated crane dispute, open Analytics |
+| Owner | Olivia | Give final approval on $180,000 of work, approve and sign the $64,000 solar change order, sign the electrical subcontract, release retention on Cedar Park, approve a purchase order, settle the escalated crane dispute, open Analytics |
 | Project manager | Marcus | Approve inspected electrical work, decide the RFI-14 change order, raise a purchase order, reply to Carla in Messages |
 | Site supervisor | Sam | Inspect the level 2 slab, file a daily report from a phone, receive a cable delivery and log material use |
 | Contractor | Carla | Submit work with photos, invoice for verified work, propose a change order, raise a dispute, chat with the team |
@@ -40,7 +40,7 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 
 - An invoice tied to work **can't be approved until that work is verified**.
 - Work and invoices over the company's limit ($10,000 in the demo) need the owner as well as the manager.
-- 5% **retention** is held on work invoices until handover.
+- 5% **retention** is held on work invoices until handover, then released by the owner or manager and paid by the accountant.
 - "No invoice", "Partially paid", "Overdue" and "Completed" are worked out from the data (invoices, payments, due dates), so they can never drift out of sync.
 
 ## Features
@@ -54,7 +54,8 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 - **Change orders:** anyone on the commercial side proposes a priced change with a reason and schedule impact. The manager approves up to the limit and the owner above it, by typing their name as a signature. Approval moves the budget line, the work value and the end date, and the original budget is always shown next to the revised one.
 - **Purchase orders and materials:** orders over the limit wait for the owner. The supervisor logs deliveries against each order, and stock on site is delivered minus used, with a low-stock alert at each material's reorder level.
 - **Expense forecasting:** each budget line's known cost is approved invoices plus invoices in review plus orders not yet invoiced. The forecast is the revised budget, or the known cost where that is higher, so real overruns show up before the invoices arrive.
-- **Documents and digital signatures:** drawings, contracts, permits and reports by category, with versions kept when the same title is uploaded again. Documents can require signatures from chosen roles. Each signature records the typed name, role, time and a SHA-256 fingerprint of the file, version and signer.
+- **Documents and digital signatures:** drawings, contracts, permits and reports by category, with versions kept when the same title is uploaded again. Documents can require signatures from named people on the project, and only they can sign. Each signature records the typed name, role, time and a SHA-256 fingerprint of the file, version and signer.
+- **Retention release at handover:** 5% is held back on work invoices. Once the project is marked completed, the owner or manager releases it in one step, contractors are told, and the accountant pays it like any other balance.
 - **Contractor ratings:** verified work is rated 1 to 5 for quality, timeliness and safety. Scorecards show on the Team page and in Analytics, next to how much work was verified on time.
 - **Disputes:** raised on work, an invoice or in general, with a message thread. The manager resolves them, or they're escalated to the owner. A disputed invoice can't be paid until the dispute is resolved.
 - **Messages:** direct chats, named group chats with anyone in the company, a company-wide chat and a thread for every project. Unread counts show in the nav, and direct and group messages also notify by email.
@@ -175,9 +176,7 @@ The end-to-end suite reseeds the demo company before it runs.
 
 ## Roadmap
 
-- Retention release at handover
 - Real-time chat over websockets (messages refresh every few seconds today)
-- Signatures tied to a named person as well as a role
 - Weekly PDF report for owners
 - Offline drafts for sites with poor signal
 - Reading invoice amounts from uploaded PDFs

@@ -109,12 +109,25 @@ export const blocksPayment = (disputes: { status: DisputeState }[]) => disputes.
 
 // ---------- Documents and signatures ----------
 
-/** Who still has to sign: required roles without a signature. */
-export function missingSigners(required: Role[], signatures: { role: Role }[]) {
-  return required.filter((r) => !signatures.some((s) => s.role === r));
+/** Who still has to sign: the named signers without a signature. */
+export function missingSigners(signerIds: string[], signatures: { userId: string }[]) {
+  return signerIds.filter((id) => !signatures.some((s) => s.userId === id));
 }
 
-export const fullySigned = (required: Role[], signatures: { role: Role }[]) => required.length > 0 && missingSigners(required, signatures).length === 0;
+export const fullySigned = (signerIds: string[], signatures: { userId: string }[]) => signerIds.length > 0 && missingSigners(signerIds, signatures).length === 0;
+
+// ---------- Retention ----------
+
+type RetentionInvoice = { status: string; retention: number; retentionReleasedAt: Date | null };
+
+/** Retention is released at handover: the owner or manager releases it once the project is completed. */
+export function canReleaseRetention(role: Role, projectStatus: string) {
+  return (role === "OWNER" || role === "MANAGER" || role === "ADMIN") && projectStatus === "COMPLETED";
+}
+
+/** Invoices still holding retention that can be released: approved or paid, not yet released. */
+export const retentionHeld = <T extends RetentionInvoice>(invoices: T[]) =>
+  invoices.filter((i) => i.retention > 0 && !i.retentionReleasedAt && ["APPROVED", "PROCESSING", "PAID"].includes(i.status));
 
 /** Next version number for a document with the same title. */
 export const nextVersion = (existing: { title: string; version: number }[], title: string) =>

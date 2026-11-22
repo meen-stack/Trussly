@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { applyPayment, payable, statusAfterRelease } from "@/lib/workflow";
+import { paymentKey } from "@/lib/status";
 import {
   blocksPayment,
+  canReleaseRetention,
+  retentionHeld,
   byMonth,
   canDecideChange,
   decideChange,
@@ -106,8 +110,9 @@ describe("disputes", () => {
 
 describe("documents", () => {
   it("knows who still has to sign", () => {
-    expect(missingSigners(["OWNER", "CONTRACTOR"], [{ role: "OWNER" }])).toEqual(["CONTRACTOR"]);
-    expect(fullySigned(["OWNER"], [{ role: "OWNER" }])).toBe(true);
+    expect(missingSigners(["olivia", "carla"], [{ userId: "olivia" }])).toEqual(["carla"]);
+    expect(missingSigners(["carla"], [{ userId: "ruth" }])).toEqual(["carla"]);
+    expect(fullySigned(["olivia"], [{ userId: "olivia" }])).toBe(true);
     expect(fullySigned([], [])).toBe(false);
   });
   it("versions documents by title", () => {
@@ -127,5 +132,35 @@ describe("analytics", () => {
       { month: "2026-01", amount: 2 },
       { month: "2026-02", amount: 4 },
     ]);
+  });
+});
+
+describe("retention at handover", () => {
+  it("is released by the owner or manager once the project is completed", () => {
+    expect(canReleaseRetention("OWNER", "COMPLETED")).toBe(true);
+    expect(canReleaseRetention("MANAGER", "COMPLETED")).toBe(true);
+    expect(canReleaseRetention("OWNER", "ACTIVE")).toBe(false);
+    expect(canReleaseRetention("CONTRACTOR", "COMPLETED")).toBe(false);
+    expect(canReleaseRetention("FINANCE", "COMPLETED")).toBe(false);
+  });
+
+  it("only picks approved or paid invoices still holding retention", () => {
+    const rows = [
+      { id: "a", status: "PAID", retention: 500, retentionReleasedAt: null },
+      { id: "b", status: "PAID", retention: 500, retentionReleasedAt: new Date() },
+      { id: "c", status: "SUBMITTED", retention: 500, retentionReleasedAt: null },
+      { id: "d", status: "APPROVED", retention: 0, retentionReleasedAt: null },
+    ];
+    expect(retentionHeld(rows).map((r) => r.id)).toEqual(["a"]);
+  });
+
+  it("makes the retention payable and shows it as due", () => {
+    const inv = { status: "PROCESSING" as const, amount: 10_000, retention: 500, dueDate: null, payments: [{ amount: 9_500 }] };
+    expect(payable(inv)).toBe(9_500);
+    const released = { ...inv, retentionReleasedAt: new Date() };
+    expect(payable(released)).toBe(10_000);
+    expect(statusAfterRelease("PAID")).toBe("PROCESSING");
+    expect(paymentKey(released)).toBe("RETENTION_DUE");
+    expect(applyPayment(released, 9_500, 500)).toEqual({ ok: true, next: "PAID" });
   });
 });

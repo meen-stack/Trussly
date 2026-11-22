@@ -5,12 +5,12 @@ import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
 import { summarizeBudget } from "@/lib/budget";
-import { forecastLine, openOrderValue, originalBudget, poTotal } from "@/lib/commercial";
+import { canReleaseRetention, forecastLine, openOrderValue, originalBudget, poTotal, retentionHeld } from "@/lib/commercial";
 import { balanceOf, paidOf } from "@/lib/status";
 import { Badge, Button, Card, CardHeader, Field, Input, Progress, Select, Stat } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { InvoiceTable, invoiceInclude } from "@/components/invoice-table";
-import { submitExpense } from "@/app/actions/expenses";
+import { releaseRetention, submitExpense } from "@/app/actions/expenses";
 import { addBudgetLine, updateBudgetLine } from "@/app/actions/projects";
 
 export const metadata: Metadata = { title: "Budget & spend" };
@@ -49,6 +49,9 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const forecastTotal = [...forecasts.values()].reduce((s, f) => s + f.forecast, 0);
   const originalTotal = [...forecasts.values()].reduce((s, f) => s + f.original, 0);
   const manage = can.manageProject(user.role);
+  const held = retentionHeld(expenses);
+  const heldTotal = held.reduce((s, e) => s + e.retention, 0);
+  const released = expenses.filter((e) => e.retentionReleasedAt).reduce((s, e) => s + e.retention, 0);
 
   return (
     <div className="space-y-6">
@@ -63,6 +66,26 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
           tone={forecastTotal > b.budgeted ? "bad" : "ok"}
         />
       </div>
+
+      {(heldTotal > 0 || released > 0) && (
+        <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-display font-semibold">Retention</p>
+            <p className="text-sm text-muted">
+              {heldTotal > 0 ? `${formatMoney(heldTotal, currency)} held on ${held.length} invoice${held.length === 1 ? "" : "s"} until handover.` : "All retention has been released."}
+              {released > 0 && ` ${formatMoney(released, currency)} released at handover.`}
+              {heldTotal > 0 && project.status !== "COMPLETED" && " It can be released once the project is marked completed."}
+            </p>
+          </div>
+          {heldTotal > 0 && canReleaseRetention(user.role, project.status) && (
+            <ActionForm action={releaseRetention.bind(null, project.id)} submitLabel={`Release ${formatMoney(heldTotal, currency)}`} className="flex flex-col gap-2 sm:items-end">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="confirm" className="accent-[#ffc107]" /> The project is handed over
+              </label>
+            </ActionForm>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

@@ -52,9 +52,7 @@ export async function otherQueue(user: CurrentUser): Promise<QueueItem[]> {
   const [changes, orders, docs, disputes] = await Promise.all([
     changeWhere ? db.changeOrder.findMany({ where: changeWhere, include: { project: { select: { name: true } } }, orderBy: { createdAt: "asc" } }) : [],
     role === "OWNER" ? db.purchaseOrder.findMany({ where: { status: "PENDING_APPROVAL", project }, include: { project: { select: { name: true } }, items: true } }) : [],
-    role === "OWNER" || role === "MANAGER" || role === "CONTRACTOR" || role === "SUPERVISOR"
-      ? db.document.findMany({ where: { project, signerRoles: { has: role }, signatures: { none: { role } } }, include: { project: { select: { name: true } } } })
-      : [],
+    db.document.findMany({ where: { project, signerIds: { has: user.id }, signatures: { none: { userId: user.id } } }, include: { project: { select: { name: true } } } }),
     role === "MANAGER" || role === "OWNER"
       ? db.dispute.findMany({ where: { project, status: role === "OWNER" ? "ESCALATED" : "OPEN" }, include: { project: { select: { name: true } } } })
       : [],

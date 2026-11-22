@@ -61,7 +61,7 @@ export function InvoiceTable({ rows, role, currency, threshold, showProject = fa
               {(paid > 0 || e.retention > 0) && (
                 <p className="mt-1 text-xs text-muted">
                   Paid {formatMoney(paid, currency)} · Balance {formatMoney(Math.max(balance, 0), currency)}
-                  {e.retention > 0 && ` · Retention held ${formatMoney(e.retention, currency)}`}
+                  {e.retention > 0 && (e.retentionReleasedAt ? ` · Retention of ${formatMoney(e.retention, currency)} released at handover` : ` · Retention held ${formatMoney(e.retention, currency)}`)}
                 </p>
               )}
               {e.payments.length > 0 && (

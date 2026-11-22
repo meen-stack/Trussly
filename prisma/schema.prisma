@@ -267,27 +267,29 @@ model Photo {
 }
 
 model Expense {
-  id              String         @id @default(cuid())
-  budgetLineId    String
-  budgetLine      BudgetLine     @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
-  submitterId     String
-  submitter       User           @relation("ExpenseSubmitter", fields: [submitterId], references: [id])
-  vendor          String
-  description     String
-  milestoneId     String?
-  milestone       Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  amount          Int // cents
-  retention       Int            @default(0) // cents held back until handover
-  invoiceUrl      String?
-  status          ExpenseStatus  @default(SUBMITTED)
-  reviewNote      String?
-  dueDate         DateTime?
-  createdAt       DateTime       @default(now())
-  decidedAt       DateTime?
-  payments        Payment[]
-  purchaseOrderId String?
-  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
-  disputes        Dispute[]
+  id                    String         @id @default(cuid())
+  budgetLineId          String
+  budgetLine            BudgetLine     @relation(fields: [budgetLineId], references: [id], onDelete: Cascade)
+  submitterId           String
+  submitter             User           @relation("ExpenseSubmitter", fields: [submitterId], references: [id])
+  vendor                String
+  description           String
+  milestoneId           String?
+  milestone             Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  amount                Int // cents
+  retention             Int            @default(0) // cents held back until handover
+  invoiceUrl            String?
+  status                ExpenseStatus  @default(SUBMITTED)
+  reviewNote            String?
+  dueDate               DateTime?
+  createdAt             DateTime       @default(now())
+  decidedAt             DateTime?
+  payments              Payment[]
+  retentionReleasedAt   DateTime? // set at handover; the retention then becomes payable
+  retentionReleasedById String?
+  purchaseOrderId       String?
+  purchaseOrder         PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  disputes              Dispute[]
 }
 
 model Payment {
@@ -423,7 +425,7 @@ model Document {
   url          String
   fileName     String
   version      Int              @default(1)
-  signerRoles  Role[] // roles that must sign before the document is fully executed
+  signerIds    String[] // the people who must sign before the document is fully executed
   uploadedById String
   uploadedBy   User             @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
   createdAt    DateTime         @default(now())

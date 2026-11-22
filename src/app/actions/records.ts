@@ -15,7 +15,6 @@ import { filesFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
 
 const CATEGORIES: DocumentCategory[] = ["DRAWING", "CONTRACT", "PERMIT", "SPECIFICATION", "REPORT", "OTHER"];
-const SIGNER_ROLES: Role[] = ["OWNER", "MANAGER", "CONTRACTOR", "SUPERVISOR"];
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}`, "layout");
@@ -34,7 +33,16 @@ export async function uploadDocument(projectId: string, _: FormState, form: Form
   const category = String(form.get("category")) as DocumentCategory;
   if (title.length < 2) return { error: "Give the document a title." };
   if (!CATEGORIES.includes(category)) return { error: "Pick a category." };
-  const signerRoles = form.getAll("signers").map(String).filter((r): r is Role => SIGNER_ROLES.includes(r as Role));
+  // Signers are named people: project members, plus owners (who see every project).
+  const picked = [...new Set(form.getAll("signers").map(String))];
+  const signers = picked.length
+    ? await db.user.findMany({
+        where: { id: { in: picked }, companyId: user.companyId, role: { not: "FINANCE" }, OR: [{ role: "OWNER" }, { memberships: { some: { projectId: project.id } } }] },
+        select: { id: true },
+      })
+    : [];
+  if (signers.length !== picked.length) return { error: "Signers must be on this project." };
+  const signerIds = signers.map((s) => s.id);
   const file = filesFrom(form, "file")[0];
   if (!file) return { error: "Attach the file (PDF or image)." };
   let url: string;
@@ -45,11 +53,9 @@ export async function uploadDocument(projectId: string, _: FormState, form: Form
   }
   const existing = await db.document.findMany({ where: { projectId: project.id }, select: { title: true, version: true } });
   const version = nextVersion(existing, title);
-  const doc = await db.document.create({ data: { projectId: project.id, title, category, url, fileName: file.name, version, signerRoles, uploadedById: user.id } });
+  const doc = await db.document.create({ data: { projectId: project.id, title, category, url, fileName: file.name, version, signerIds, uploadedById: user.id } });
   await audit(user.id, `uploaded "${title}"${version > 1 ? ` (version ${version})` : ""}`, "Document", doc.id, project.id);
-  if (signerRoles.length) {
-    await notifyProjectRoles(project.id, signerRoles, { title: `Signature needed: ${title}`, body: `${user.name} uploaded a document on ${project.name} for signature.`, href: `/projects/${project.id}/documents` }, user.id);
-  }
+  await notifyUsers(signerIds.filter((id) => id !== user.id), { title: `Signature needed: ${title}`, body: `${user.name} needs your signature on a document for ${project.name}.`, href: `/projects/${project.id}/documents` });
   refresh(project.id);
   return { success: version > 1 ? `Uploaded as version ${version}.` : "Uploaded." };
 }
@@ -60,7 +66,7 @@ export async function signDocument(projectId: string, documentId: string, _: For
   const project = await getProjectForUser(user, projectId);
   const doc = await db.document.findFirst({ where: { id: documentId, projectId: project.id }, include: { signatures: true } });
   if (!doc) return { error: "Document not found." };
-  if (!missingSigners(doc.signerRoles, doc.signatures).includes(user.role)) return { error: "Your signature isn't needed on this document." };
+  if (!missingSigners(doc.signerIds, doc.signatures).includes(user.id)) return { error: "Your signature isn't needed on this document." };
   const signedName = String(form.get("signature") ?? "").trim();
   if (signedName.toLowerCase() !== user.name.toLowerCase()) return { error: `Type your full name (${user.name}) to sign.` };
   if (!form.get("agree")) return { error: "Tick the box to confirm you agree." };
@@ -68,7 +74,7 @@ export async function signDocument(projectId: string, documentId: string, _: For
   await db.signature.create({
     data: { documentId: doc.id, userId: user.id, signedName, role: user.role, signedAt: now, fingerprint: fingerprint([doc.id, doc.url, doc.version, user.id, signedName, now.toISOString()]) },
   });
-  const done = fullySigned(doc.signerRoles, [...doc.signatures, { role: user.role }]);
+  const done = fullySigned(doc.signerIds, [...doc.signatures, { userId: user.id }]);
   await audit(user.id, `signed "${doc.title}" v${doc.version} as ${ROLE_LABEL[user.role]}${done ? " (fully signed)" : ""}`, "Document", doc.id, project.id);
   if (done) await notifyUsers([doc.uploadedById], { title: `Fully signed: ${doc.title}`, body: `Everyone has signed version ${doc.version}.`, href: `/projects/${project.id}/documents` });
   refresh(project.id);

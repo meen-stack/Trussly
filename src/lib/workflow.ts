@@ -102,11 +102,16 @@ export function nextInvoiceStatus(current: ExpenseStatus, action: InvoiceAction,
   }
 }
 
-/** Amount payable now: the invoice less retention held until handover. */
-export const payable = (inv: { amount: number; retention: number }) => inv.amount - inv.retention;
+type Payable = { amount: number; retention: number; retentionReleasedAt?: Date | null };
+
+/** Amount payable now: the invoice less retention, until the retention is released at handover. */
+export const payable = (inv: Payable) => inv.amount - (inv.retentionReleasedAt ? 0 : inv.retention);
+
+/** After retention is released, a fully paid invoice owes the retention again. */
+export const statusAfterRelease = (status: ExpenseStatus): ExpenseStatus => (status === "PAID" ? "PROCESSING" : status);
 
 /** Validates a payment and works out the invoice status after it. */
-export function applyPayment(inv: { amount: number; retention: number }, paidSoFar: number, amount: number): Result<ExpenseStatus> {
+export function applyPayment(inv: Payable, paidSoFar: number, amount: number): Result<ExpenseStatus> {
   const balance = payable(inv) - paidSoFar;
   if (amount <= 0) return { ok: false, error: "Enter the amount paid." };
   if (amount > balance) return { ok: false, error: "That's more than the balance due." };

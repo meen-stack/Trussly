@@ -22,11 +22,19 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
   const { category } = (await searchParams) as { category?: DocumentCategory };
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
-  const docs = await db.document.findMany({
+  const [docs, people] = await Promise.all([
+    db.document.findMany({
     where: { projectId: project.id },
     include: { uploadedBy: true, signatures: { include: { user: true }, orderBy: { signedAt: "asc" } } },
     orderBy: [{ title: "asc" }, { version: "desc" }],
-  });
+    }),
+    // Who can be asked to sign: owners and the project team, except the accountant.
+    db.user.findMany({
+      where: { companyId: user.companyId, role: { not: "FINANCE" }, OR: [{ role: "OWNER" }, { memberships: { some: { projectId: project.id } } }] },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+  ]);
+  const nameOf = new Map(people.map((p) => [p.id, p.name]));
   // Latest version of each title, with its earlier versions.
   const groups = new Map<string, typeof docs>();
   for (const d of docs) {
@@ -34,7 +42,7 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
     groups.set(k, [...(groups.get(k) ?? []), d]);
   }
   const latest = [...groups.values()].map((g) => ({ doc: g[0], older: g.slice(1) })).filter((g) => !category || g.doc.category === category);
-  const toSign = latest.filter((g) => missingSigners(g.doc.signerRoles, g.doc.signatures).includes(user.role));
+  const toSign = latest.filter((g) => missingSigners(g.doc.signerIds, g.doc.signatures).includes(user.id));
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -50,8 +58,8 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
         {toSign.length > 0 && <p className="rounded-lg border border-brand/30 bg-brand-soft px-4 py-2 text-sm text-brand-text">{toSign.length} document{toSign.length === 1 ? " needs" : "s need"} your signature.</p>}
         {latest.length === 0 && <Card><EmptyState title="No documents" body="Upload drawings, contracts and permits. Contracts can be signed here by each party." /></Card>}
         {latest.map(({ doc, older }) => {
-          const missing = missingSigners(doc.signerRoles, doc.signatures);
-          const signed = fullySigned(doc.signerRoles, doc.signatures);
+          const missing = missingSigners(doc.signerIds, doc.signatures);
+          const signed = fullySigned(doc.signerIds, doc.signatures);
           return (
             <Card key={doc.id} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -62,7 +70,7 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
                     <span className="block text-xs text-muted">{CATEGORY[doc.category]} · v{doc.version} · {doc.fileName} · {doc.uploadedBy.name}, {format(doc.createdAt, "MMM d, yyyy")}</span>
                   </span>
                 </a>
-                {doc.signerRoles.length > 0 && (signed ? <Badge tone="ok">Fully signed</Badge> : <Badge tone="warn">Awaiting {missing.map((r) => ROLE_LABEL[r]).join(", ")}</Badge>)}
+                {doc.signerIds.length > 0 && (signed ? <Badge tone="ok">Fully signed</Badge> : <Badge tone="warn">Awaiting {missing.map((id) => nameOf.get(id) ?? "a former member").join(", ")}</Badge>)}
               </div>
               {doc.signatures.length > 0 && (
                 <ul className="mt-3 space-y-1.5">
@@ -75,12 +83,12 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
                   ))}
                 </ul>
               )}
-              {missing.includes(user.role) && (
+              {missing.includes(user.id) && (
                 <div className="mt-3 rounded-lg border border-line bg-bg p-3">
                   <InlineForm action={signDocument.bind(null, project.id, doc.id)} submitLabel="Sign document" variant="success">
                     <Input name="signature" placeholder={`Type your full name: ${user.name}`} autoComplete="off" className="font-display italic" />
                     <label className="flex items-start gap-2 text-xs">
-                      <input type="checkbox" name="agree" className="mt-0.5 accent-[#ffc107]" />I have read version {doc.version} and agree to sign it electronically as {ROLE_LABEL[user.role]}.
+                      <input type="checkbox" name="agree" className="mt-0.5 accent-[#ffc107]" />I have read version {doc.version} and agree to sign it electronically as {user.name}, {ROLE_LABEL[user.role]}.
                     </label>
                   </InlineForm>
                 </div>
@@ -116,9 +124,10 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
               <Field label="File" hint="PDF or image, up to 8 MB."><Input name="file" type="file" accept="application/pdf,image/*" required /></Field>
               <fieldset className="space-y-1.5">
                 <legend className="text-sm font-medium">Needs signatures from</legend>
-                {(["OWNER", "MANAGER", "CONTRACTOR", "SUPERVISOR"] as const).map((r) => (
-                  <label key={r} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="signers" value={r} className="accent-[#ffc107]" /> {ROLE_LABEL[r]}
+                {people.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="signers" value={p.id} className="accent-[#ffc107]" /> {p.name}
+                    <span className="text-xs text-muted">{ROLE_LABEL[p.role]}{p.title ? ` · ${p.title}` : ""}</span>
                   </label>
                 ))}
               </fieldset>

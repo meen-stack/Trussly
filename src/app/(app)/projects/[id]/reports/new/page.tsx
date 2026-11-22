@@ -7,6 +7,7 @@ import { can } from "@/lib/permissions";
 import { Card } from "@/components/ui";
 import { ReportForm } from "@/components/report-form";
 import { submitReport } from "@/app/actions/reports";
+import { directUploads } from "@/lib/storage";
 
 export const metadata: Metadata = { title: "New daily report" };
 
@@ -22,7 +23,7 @@ export default async function NewReportPage({ params }: PageProps<"/projects/[id
   return (
     <Card className="max-w-2xl p-6">
       <h2 className="font-display mb-5 text-lg font-semibold">Daily site report</h2>
-      <ReportForm action={submitReport.bind(null, project.id)} lastProgress={last?.progress ?? 0} />
+      <ReportForm action={submitReport.bind(null, project.id)} lastProgress={last?.progress ?? 0} folder={`projects/${project.id}`} direct={directUploads} />
     </Card>
   );
 }

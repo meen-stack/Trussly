@@ -12,7 +12,7 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { disputeAction, fullySigned, missingSigners, nextVersion, validScore } from "@/lib/commercial";
 import { fingerprint } from "@/lib/signature";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
-import { filesFrom, storeFile } from "@/lib/storage";
+import { filesFrom, mediaFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
 
 const CATEGORIES: DocumentCategory[] = ["DRAWING", "CONTRACT", "PERMIT", "SPECIFICATION", "REPORT", "OTHER"];
@@ -125,8 +125,14 @@ export async function raiseDispute(projectId: string, _: FormState, form: FormDa
     expenseId = e.id;
   }
   const amount = parsed.data.amount ? parseMoney(parsed.data.amount) : null;
+  let attachments: string[];
+  try {
+    attachments = await mediaFrom(form, "media", `projects/${project.id}`);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
   const d = await db.dispute.create({
-    data: { projectId: project.id, title: parsed.data.title, milestoneId, expenseId, amount, raisedById: user.id, messages: { create: { authorId: user.id, body: parsed.data.body } } },
+    data: { projectId: project.id, title: parsed.data.title, milestoneId, expenseId, amount, raisedById: user.id, messages: { create: { authorId: user.id, body: parsed.data.body, attachments } } },
   });
   await audit(user.id, `raised a dispute: "${d.title}"${amount ? ` (${formatMoney(amount, user.company.currency)})` : ""}`, "Dispute", d.id, project.id, { note: parsed.data.body });
   await notifyProjectRoles(project.id, ["MANAGER", ...(expenseId ? (["FINANCE"] as Role[]) : [])], { title: `Dispute raised: ${d.title}`, body: `${user.name} on ${project.name}.${expenseId ? " Payment of the invoice is on hold." : ""}`, href: `/projects/${project.id}/disputes` }, user.id);
@@ -140,11 +146,17 @@ export async function replyDispute(projectId: string, disputeId: string, _: Form
   const d = await db.dispute.findFirst({ where: { id: disputeId, projectId: project.id, ...disputeScope(user) }, include: { messages: { select: { authorId: true } } } });
   if (!d) return { error: "Dispute not found." };
   const body = String(form.get("body") ?? "").trim();
+  let attachments: string[];
+  try {
+    attachments = await mediaFrom(form, "media", `projects/${project.id}`);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
   const action = String(form.get("action") ?? "reply");
   if (action === "reply") {
     if (d.status === "RESOLVED") return { error: "This dispute is resolved." };
-    if (body.length < 2) return { error: "Write a reply." };
-    await db.disputeMessage.create({ data: { disputeId: d.id, authorId: user.id, body } });
+    if (body.length < 2 && !attachments.length) return { error: "Write a reply." };
+    await db.disputeMessage.create({ data: { disputeId: d.id, authorId: user.id, body, attachments } });
     await notifyUsers([d.raisedById, ...d.messages.map((m) => m.authorId)].filter((id) => id !== user.id), { title: `Reply on dispute: ${d.title}`, body: `${user.name}: ${body.slice(0, 140)}`, href: `/projects/${project.id}/disputes` });
     refresh(project.id);
     return { success: "Sent." };
@@ -154,7 +166,9 @@ export async function replyDispute(projectId: string, disputeId: string, _: Form
   if (step.next === "RESOLVED" && body.length < 5) return { error: "Write the resolution." };
   await db.$transaction([
     db.dispute.update({ where: { id: d.id }, data: step.next === "RESOLVED" ? { status: "RESOLVED", resolution: body, resolvedById: user.id, resolvedAt: new Date() } : { status: "ESCALATED" } }),
-    ...(body ? [db.disputeMessage.create({ data: { disputeId: d.id, authorId: user.id, body: step.next === "RESOLVED" ? `Resolved: ${body}` : `Escalated to the owner. ${body}` } })] : []),
+    ...(body || attachments.length
+      ? [db.disputeMessage.create({ data: { disputeId: d.id, authorId: user.id, attachments, body: step.next === "RESOLVED" ? `Resolved: ${body}` : `Escalated to the owner. ${body}`.trim() } })]
+      : []),
   ]);
   await audit(user.id, `${step.next === "RESOLVED" ? "resolved" : "escalated"} the dispute "${d.title}"`, "Dispute", d.id, project.id, body ? { note: body } : undefined);
   const href = `/projects/${project.id}/disputes`;

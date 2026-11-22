@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAs, openProject, PHOTO } from "./helpers";
+import { loginAs, openProject, PHOTO, VIDEO } from "./helpers";
 
 const PROJECT = "Harbour View Residences";
 
@@ -35,10 +35,11 @@ test("work: contractor submits, supervisor inspects, manager approves, owner giv
   await loginAs(page, "CONTRACTOR");
   await openProject(page, PROJECT, "Work");
   await card().getByRole("button", { name: "Submit completed work" }).click();
-  await card().locator('input[name="photos"]').setInputFiles(PHOTO);
+  await card().locator('input[name="photos"]').setInputFiles([PHOTO, VIDEO]);
   await card().locator('textarea[name="note"]').fill("Frame complete to level 4.");
   await card().getByRole("button", { name: "Submit for inspection" }).click();
   await expect(card().getByText("Awaiting inspection")).toBeVisible();
+  await expect(card().getByRole("link", { name: "Play video" })).toHaveCount(1);
 
   await loginAs(page, "MANAGER");
   await openProject(page, PROJECT, "Work");

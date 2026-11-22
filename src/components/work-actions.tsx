@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 import type { WorkAction } from "@/lib/workflow";
-import { Button, FormError, Input, Textarea } from "./ui";
+import { Button, FormError, Textarea } from "./ui";
+import { MediaPicker } from "./media";
 
 type State = { error?: string; success?: string } | undefined;
 type Action = (s: State, f: FormData) => Promise<State>;
@@ -19,9 +20,10 @@ const COPY: Record<WorkAction, { button: string; variant: "primary" | "success" 
 };
 
 /** Buttons for whichever verification steps this user can take right now. */
-export function WorkActions({ action, options }: { action: Action; options: WorkAction[] }) {
+export function WorkActions({ action, options, folder, direct }: { action: Action; options: WorkAction[]; folder: string; direct: boolean }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [mode, setMode] = useState<WorkAction | null>(null);
+  const [uploading, setUploading] = useState(false);
   if (options.length === 0) return null;
 
   if (mode && COPY[mode].form) {
@@ -29,12 +31,12 @@ export function WorkActions({ action, options }: { action: Action; options: Work
     return (
       <form action={formAction} className="mt-3 space-y-2 rounded-lg border border-line bg-bg p-3">
         <input type="hidden" name="action" value={mode} />
-        {mode === "submit" && <Input name="photos" type="file" accept="image/*" capture="environment" multiple required aria-label="Photos of the completed work" />}
+        {mode === "submit" && <MediaPicker name="photos" folder={folder} direct={direct} required label="Photos or videos of the work" onBusyChange={setUploading} />}
         <Textarea name="note" rows={2} placeholder={c.form!.placeholder} required={mode !== "submit"} />
         <FormError message={state?.error} />
         <div className="flex gap-2">
-          <Button type="submit" disabled={pending} variant={c.variant === "secondary" ? "primary" : c.variant}>
-            {pending ? "Saving…" : c.form!.submit}
+          <Button type="submit" disabled={pending || uploading} variant={c.variant === "secondary" ? "primary" : c.variant}>
+            {uploading ? "Uploading…" : pending ? "Saving…" : c.form!.submit}
           </Button>
           <Button type="button" variant="ghost" onClick={() => setMode(null)}>
             Cancel

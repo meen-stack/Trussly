@@ -18,6 +18,8 @@ import { transitionWork } from "@/app/actions/milestones";
 import { rateWork } from "@/app/actions/records";
 import { InlineForm } from "@/components/decision-form";
 import { ratingScore } from "@/lib/commercial";
+import { directUploads } from "@/lib/storage";
+import { Media } from "@/components/media";
 
 export const metadata: Metadata = { title: "Work" };
 
@@ -149,12 +151,11 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
               {m.photos.length > 0 && (
                 <div className="mt-3 flex gap-2 overflow-x-auto">
                   {m.photos.map((p) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={p.id} src={p.url} alt="" className="h-20 w-28 shrink-0 rounded-md object-cover" />
+                    <Media key={p.id} url={p.url} thumb className="h-20 w-28 shrink-0 rounded-md object-cover" />
                   ))}
                 </div>
               )}
-              <WorkActions action={transitionWork.bind(null, project.id, m.id)} options={options} />
+              <WorkActions action={transitionWork.bind(null, project.id, m.id)} options={options} folder={`projects/${project.id}`} direct={directUploads} />
               {m.ratings[0] && (
                 <p className="mt-3 text-sm">
                   <span className="font-medium">Rating {ratingScore(m.ratings[0]).toFixed(1)}/5</span>

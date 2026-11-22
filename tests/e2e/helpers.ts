@@ -17,3 +17,4 @@ export async function openProject(page: Page, name: string, tab?: string) {
 }
 
 export const PHOTO = "tests/e2e/fixtures/site.png";
+export const VIDEO = "tests/e2e/fixtures/site.webm";

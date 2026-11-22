@@ -9,6 +9,8 @@ import { ROLE_LABEL } from "@/lib/permissions";
 import { chatKind, chatList, chatName, ensureDefaultChats } from "@/lib/messages";
 import { Button, Card, cn } from "@/components/ui";
 import { ChatComposer, LiveRefresh, ScrollToEnd } from "@/components/chat";
+import { Attachments } from "@/components/media";
+import { directUploads } from "@/lib/storage";
 import { addToGroup, leaveGroup, sendMessage } from "@/app/actions/messages";
 import { ChatList } from "../chat-list";
 import { chatScope } from "@/lib/scope";
@@ -136,7 +138,8 @@ export default async function ChatPage({ params }: PageProps<"/messages/[id]">) 
                         {m.author.name} <span className="font-normal text-muted">· {ROLE_LABEL[m.author.role]}</span>
                       </p>
                     )}
-                    <p className="break-words whitespace-pre-line">{m.body}</p>
+                    <Attachments urls={m.attachments} className={m.body ? "mb-1.5" : ""} />
+                    {m.body && <p className="break-words whitespace-pre-line">{m.body}</p>}
                     <p className={cn("mt-0.5 text-right text-[10px]", mine ? "text-brand-ink/60" : "text-muted")}>{format(m.createdAt, "h:mm a")}</p>
                   </div>
                 </div>
@@ -145,7 +148,7 @@ export default async function ChatPage({ params }: PageProps<"/messages/[id]">) 
           })}
           <ScrollToEnd marker={messages.at(-1)?.id ?? ""} />
         </div>
-        <ChatComposer action={sendMessage.bind(null, chat.id)} />
+        <ChatComposer action={sendMessage.bind(null, chat.id)} folder={`chats/${chat.id}`} direct={directUploads} />
       </Card>
     </div>
   );

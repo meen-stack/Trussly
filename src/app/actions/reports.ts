@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
 import { can } from "@/lib/permissions";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
-import { filesFrom, storeFile } from "@/lib/storage";
+import { mediaFrom } from "@/lib/storage";
 import type { FormState } from "./auth";
 
 export async function submitReport(projectId: string, _: FormState, form: FormData): Promise<FormState> {
@@ -34,11 +34,9 @@ export async function submitReport(projectId: string, _: FormState, form: FormDa
   if (await db.dailyReport.findUnique({ where: { projectId_date: { projectId: project.id, date: d.date } } })) {
     return { error: "A report for that date already exists." };
   }
-  const files = filesFrom(form, "photos");
-  if (files.length > 12) return { error: "Attach up to 12 photos per report." };
   let urls: string[];
   try {
-    urls = await Promise.all(files.map((f) => storeFile(f, `projects/${project.id}`)));
+    urls = await mediaFrom(form, "photos", `projects/${project.id}`);
   } catch (e) {
     return { error: (e as Error).message };
   }

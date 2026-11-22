@@ -9,6 +9,8 @@ import { can } from "@/lib/permissions";
 import { Button, Card, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/status";
 import { reviewReport } from "@/app/actions/reports";
+import { Media } from "@/components/media";
+import { isVideo } from "@/lib/media";
 
 export const metadata: Metadata = { title: "Daily report" };
 
@@ -84,9 +86,8 @@ export default async function ReportPage({ params }: PageProps<"/projects/[id]/r
         {report.photos.length > 0 && (
           <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {report.photos.map((p) => (
-              <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="group relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.url} alt={p.caption ?? "Site photo"} className="aspect-[4/3] w-full rounded-lg object-cover" />
+              <a key={p.id} href={isVideo(p.url) ? undefined : p.url} target="_blank" rel="noreferrer" className="group relative block">
+                <Media url={p.url} alt={p.caption ?? "Site photo"} className="aspect-[4/3] w-full rounded-lg object-cover" />
                 {p.lat != null && (
                   <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                     <MapPin className="h-3 w-3" /> {p.lat.toFixed(4)}, {p.lng?.toFixed(4)}

@@ -48,7 +48,7 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 - **Work verification:** the contractor submits completed work with photos, the site supervisor inspects and passes it or asks for corrections, the project manager approves, and the owner gives final approval above the limit. Every step is recorded.
 - **Invoices and payments:** contractors invoice against budget lines and verified work. Managers and owners approve, and the accountant records full or partial payments with references, or refuses a payment with a reason. Due dates follow the company's payment terms.
 - **Finance:** what's approved and unpaid, what's overdue, what was paid this month, retention held, payment history and a budget, committed and paid report for each project.
-- **Daily site reports:** weather, workforce, work done, challenges, materials received, equipment used, site incidents, supervisor remarks and photos tagged with GPS location. Mobile-first, with the camera opening directly.
+- **Daily site reports:** weather, workforce, work done, challenges, materials received, equipment used, site incidents, supervisor remarks, and photos and videos tagged with GPS location. Mobile-first.
 - **Dashboards for each role:** owners see the portfolio, budget warnings and approvals. Supervisors see inspections and today's reports. Contractors see their work, invoices and what they're owed. Accountants see payments due and overdue.
 - **Budget against actual:** lines turn amber at 90% and red past 100%, and crossing a threshold sends an alert.
 - **Change orders:** anyone on the commercial side proposes a priced change with a reason and schedule impact. The manager approves up to the limit and the owner above it, by typing their name as a signature. Approval moves the budget line, the work value and the end date, and the original budget is always shown next to the revised one.
@@ -63,6 +63,7 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 - **Notifications:** in-app and by email (through Gmail or any SMTP account, or Resend) for work submitted, inspection requests, approvals, corrections, new invoices, invoice approvals, payments, budget alerts, deadlines coming up and overdue work and invoices.
 - **Photo timeline and audit trail:** every photo by day, and every approval, rejection, signature, payment and budget change with who did it and when. The audit trail filters by type, person, date and text, and exports to CSV.
 - **Accounts:** sign-up creates a company, owners invite people by role, and users can reset their password by email.
+- **Photos and videos as evidence:** on work submissions, daily reports, disputes and chats. Files upload straight from the phone to Vercel Blob at full quality (photos up to 50 MB, videos up to 500 MB) and videos play in place.
 - **Simple screens and a tutorial:** short labels, forms tucked behind a + until needed, and a ☰ menu on phones. A short first-run tutorial for each role can be skipped and reopened from the menu.
 
 | | |

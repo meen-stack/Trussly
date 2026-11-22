@@ -486,13 +486,15 @@ model Dispute {
 }
 
 model DisputeMessage {
-  id        String   @id @default(cuid())
-  disputeId String
-  dispute   Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  body      String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  disputeId   String
+  dispute     Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body        String
+  /// Photo and video URLs attached as evidence.
+  attachments String[] @default([])
+  createdAt   DateTime @default(now())
 }
 
 /// A direct chat (no title), a named group chat, the company-wide chat, or the group thread for a project.
@@ -530,6 +532,8 @@ model Message {
   authorId       String
   author         User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
   body           String
+  /// Photo and video URLs.
+  attachments    String[]     @default([])
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])

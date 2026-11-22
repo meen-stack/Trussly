@@ -10,6 +10,8 @@ import { disputeAction } from "@/lib/commercial";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { ButtonsForm } from "@/components/decision-form";
+import { Attachments, MediaPicker } from "@/components/media";
+import { directUploads } from "@/lib/storage";
 import { raiseDispute, replyDispute } from "@/app/actions/records";
 
 export const metadata: Metadata = { title: "Disputes" };
@@ -90,7 +92,8 @@ export default async function DisputesPage({ params }: PageProps<"/projects/[id]
                     <p className="text-xs text-muted">
                       <span className="font-medium text-ink">{m.author.name}</span> ({ROLE_LABEL[m.author.role]}) · {format(m.createdAt, "MMM d, h:mm a")}
                     </p>
-                    <p className="mt-0.5 whitespace-pre-line">{m.body}</p>
+                    {m.body && <p className="mt-0.5 whitespace-pre-line">{m.body}</p>}
+                    <Attachments urls={m.attachments} className="mt-2 max-w-md" />
                   </li>
                 ))}
               </ol>
@@ -102,6 +105,7 @@ export default async function DisputesPage({ params }: PageProps<"/projects/[id]
               {d.status !== "RESOLVED" && (
                 <ButtonsForm action={replyDispute.bind(null, project.id, d.id)}>
                   <Textarea name="body" rows={2} placeholder={canResolve ? "Reply, or write the resolution" : "Reply"} />
+                  <MediaPicker name="media" folder={`projects/${project.id}`} direct={directUploads} label="Add photos or videos" />
                   <div className="flex flex-wrap gap-2">
                     <Button name="action" value="reply" variant="secondary">
                       Reply
@@ -163,6 +167,7 @@ export default async function DisputesPage({ params }: PageProps<"/projects/[id]
                 <Field label="What's the issue?">
                   <Textarea name="body" rows={3} required />
                 </Field>
+                <MediaPicker name="media" folder={`projects/${project.id}`} direct={directUploads} label="Add photos or videos" />
               </ActionForm>
             </div>
           </details>

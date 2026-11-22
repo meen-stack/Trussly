@@ -9,6 +9,7 @@ import { chatScope } from "@/lib/scope";
 import type { CurrentUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import type { FormState } from "./auth";
+import { mediaFrom } from "@/lib/storage";
 
 async function memberChat(user: CurrentUser, conversationId: string) {
   return db.conversation.findFirst({
@@ -74,11 +75,17 @@ export async function sendMessage(conversationId: string, _: FormState, form: Fo
   const chat = await memberChat(user, conversationId);
   if (!chat) return { error: "Chat not found." };
   const body = String(form.get("body") ?? "").trim();
-  if (!body) return { error: "Write a message." };
+  let attachments: string[];
+  try {
+    attachments = await mediaFrom(form, "media", `chats/${chat.id}`);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  if (!body && !attachments.length) return { error: "Write a message." };
   if (body.length > 4000) return { error: "Keep messages under 4,000 characters." };
   const now = new Date();
   await db.$transaction([
-    db.message.create({ data: { conversationId: chat.id, authorId: user.id, body, createdAt: now } }),
+    db.message.create({ data: { conversationId: chat.id, authorId: user.id, body, attachments, createdAt: now } }),
     db.conversation.update({ where: { id: chat.id }, data: { lastMessageAt: now } }),
     db.conversationMember.update({ where: { conversationId_userId: { conversationId: chat.id, userId: user.id } }, data: { lastReadAt: now } }),
   ]);
@@ -87,7 +94,7 @@ export async function sendMessage(conversationId: string, _: FormState, form: Fo
   if (kind === "direct" || kind === "group") {
     const others = chat.members.map((m) => m.user.id).filter((id) => id !== user.id);
     const name = chatName(chat, user.id);
-    await notifyUsers(others, { title: kind === "direct" ? `Message from ${user.name}` : `${user.name} in ${name}`, body: body.slice(0, 200), href: `/messages/${chat.id}` });
+    await notifyUsers(others, { title: kind === "direct" ? `Message from ${user.name}` : `${user.name} in ${name}`, body: body.slice(0, 200) || (attachments.length === 1 ? "Sent a photo or video" : `Sent ${attachments.length} photos or videos`), href: `/messages/${chat.id}` });
   }
   revalidatePath("/messages", "layout");
   return undefined;

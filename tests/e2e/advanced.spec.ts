@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAs, openProject } from "./helpers";
+import { loginAs, openProject, VIDEO } from "./helpers";
 
 const PROJECT = "Harbour View Residences";
 
@@ -105,6 +105,10 @@ test("messages: direct chat, unread badge and a new group", async ({ page }) => 
   await page.getByRole("button", { name: "Create group" }).click();
   await expect(page.getByRole("heading", { name: "E2E crew" })).toBeVisible();
   await expect(page.getByText('Carla Mendes created the group "E2E crew".', { exact: true })).toBeVisible();
+  // A video with no text sends on its own and plays in the chat.
+  await page.locator('input[name="media"]').setInputFiles(VIDEO);
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator("video[controls]")).toHaveCount(1);
 
   await loginAs(page, "MANAGER");
   await page.getByRole("link", { name: /Messages/ }).first().click();

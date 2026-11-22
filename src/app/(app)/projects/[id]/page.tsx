@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { Badge, Card, CardHeader, EmptyState, Stat } from "@/components/ui";
 import { WorkBadge } from "@/components/status";
 import { BudgetChart, ProgressChart, SpendChart } from "@/components/charts";
+import { Media } from "@/components/media";
 
 export default async function ProjectOverview({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
@@ -137,12 +138,11 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
             {photos.length ? (
               <div className="grid grid-cols-3 gap-1 p-2">
                 {photos.map((p) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={p.id} src={p.url} alt={p.caption ?? "Site photo"} className="aspect-square w-full rounded-md object-cover" />
+                  <Media key={p.id} url={p.url} alt={p.caption ?? "Site photo"} thumb className="aspect-square w-full rounded-md object-cover" />
                 ))}
               </div>
             ) : (
-              <EmptyState title="No photos yet" />
+              <EmptyState title="No photos or videos yet" />
             )}
           </Card>
         </div>

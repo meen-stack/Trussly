@@ -3,19 +3,24 @@
 import { useActionState, useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import { Button, Field, FormError, Input, Select, Textarea } from "./ui";
+import { MediaPicker } from "./media";
 
 type State = { error?: string } | undefined;
 
 export function ReportForm({
   action,
   lastProgress,
+  folder,
+  direct,
 }: {
   action: (s: State, f: FormData) => Promise<State>;
   lastProgress: number;
+  folder: string;
+  direct: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(lastProgress);
 
   useEffect(() => {
@@ -74,36 +79,21 @@ export function ReportForm({
       <Field label="Supervisor remarks">
         <Textarea name="remarks" rows={2} placeholder="Good productivity. On track for Friday's pour." />
       </Field>
-      <Field label="Site photos">
-        <Input
-          name="photos"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          multiple
-          onChange={(e) => setPreviews(Array.from(e.target.files ?? []).map((f) => URL.createObjectURL(f)))}
-        />
+      <Field label="Site photos and videos">
+        <MediaPicker name="photos" folder={folder} direct={direct} onBusyChange={setUploading} />
       </Field>
-      {previews.length > 0 && (
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-          {previews.map((src) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={src} src={src} alt="" className="aspect-square w-full rounded-md object-cover" />
-          ))}
-        </div>
-      )}
       {coords && (
         <>
           <input type="hidden" name="lat" value={coords.lat} />
           <input type="hidden" name="lng" value={coords.lng} />
           <p className="flex items-center gap-1 text-xs text-muted">
-            <MapPin className="h-3.5 w-3.5" /> Photos will be tagged with your location.
+            <MapPin className="h-3.5 w-3.5" /> Tagged with your location.
           </p>
         </>
       )}
       <FormError message={state?.error} />
-      <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-        {pending ? "Uploading…" : "Submit report"}
+      <Button type="submit" disabled={pending || uploading} className="w-full sm:w-auto">
+        {uploading ? "Uploading…" : pending ? "Saving…" : "Submit report"}
       </Button>
     </form>
   );

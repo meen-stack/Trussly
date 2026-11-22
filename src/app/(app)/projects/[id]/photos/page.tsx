@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
 import { db } from "@/lib/db";
 import { Card, EmptyState } from "@/components/ui";
+import { Media } from "@/components/media";
+import { isVideo } from "@/lib/media";
 
 export const metadata: Metadata = { title: "Photos" };
 
@@ -25,7 +27,7 @@ export default async function PhotosPage({ params }: PageProps<"/projects/[id]/p
   if (photos.length === 0)
     return (
       <Card>
-        <EmptyState title="No photos yet" />
+        <EmptyState title="No photos or videos yet" />
       </Card>
     );
 
@@ -42,10 +44,13 @@ export default async function PhotosPage({ params }: PageProps<"/projects/[id]/p
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {list.map((p) => (
               <figure key={p.id} className="overflow-hidden rounded-lg border border-line bg-surface">
-                <a href={p.url} target="_blank" rel="noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.url} alt={p.caption ?? "Site photo"} className="aspect-[4/3] w-full object-cover" />
-                </a>
+                {isVideo(p.url) ? (
+                  <Media url={p.url} className="aspect-[4/3] w-full object-cover" />
+                ) : (
+                  <a href={p.url} target="_blank" rel="noreferrer">
+                    <Media url={p.url} alt={p.caption ?? "Site photo"} className="aspect-[4/3] w-full object-cover" />
+                  </a>
+                )}
                 <figcaption className="truncate px-2 py-1.5 text-xs text-muted">
                   {p.report ? (
                     <Link href={`/projects/${project.id}/reports/${p.report.id}`} className="hover:text-brand-text">

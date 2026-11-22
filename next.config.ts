@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [{ protocol: "https", hostname: "**.public.blob.vercel-storage.com" }],
   },
   experimental: {
-    serverActions: { bodySizeLimit: "25mb" },
+    serverActions: { bodySizeLimit: "100mb" },
   },
 };
 

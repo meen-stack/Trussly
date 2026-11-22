@@ -7,7 +7,7 @@ import { getProjectForUser } from "@/lib/access";
 import { NEEDS_NOTE, nextWorkStatus, type WorkAction } from "@/lib/workflow";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { formatMoney } from "@/lib/money";
-import { filesFrom, storeFile } from "@/lib/storage";
+import { mediaFrom } from "@/lib/storage";
 import type { FormState } from "./auth";
 
 const VERB: Record<WorkAction, string> = {
@@ -34,13 +34,14 @@ export async function transitionWork(projectId: string, milestoneId: string, _: 
   if (!result.ok) return { error: result.error };
   if (NEEDS_NOTE.includes(action) && !note) return { error: "Say what needs fixing so the contractor knows." };
 
-  const files = action === "submit" ? filesFrom(form, "photos") : [];
-  if (action === "submit" && files.length === 0) return { error: "Attach at least one photo as evidence." };
   let urls: string[] = [];
-  try {
-    urls = await Promise.all(files.map((f) => storeFile(f, `projects/${project.id}`)));
-  } catch (e) {
-    return { error: (e as Error).message };
+  if (action === "submit") {
+    try {
+      urls = await mediaFrom(form, "photos", `projects/${project.id}`);
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+    if (urls.length === 0) return { error: "Attach at least one photo or video as evidence." };
   }
 
   const now = new Date();

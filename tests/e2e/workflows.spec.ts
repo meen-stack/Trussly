@@ -160,3 +160,27 @@ test("signup creates a workspace and a project", async ({ page }) => {
   await page.getByRole("link", { name: "Budget & spend" }).click();
   await expect(page.getByText("$900,000").first()).toBeVisible();
 });
+
+test("invites: the join link can be copied when email isn't set up, and works", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await loginAs(page, "OWNER");
+  const email = `invitee-${Date.now()}@example.com`;
+  await page.goto("/team");
+  await page.locator("summary", { hasText: "Invite someone" }).click();
+  await page.locator('input[name="email"]').fill(email);
+  await page.locator('select[name="role"]').selectOption("CONTRACTOR");
+  await page.getByRole("button", { name: "Send invite" }).click();
+  await expect(page.getByText("the email didn't send")).toBeVisible();
+  const row = page.locator("li", { hasText: email });
+  await row.getByRole("button", { name: "Copy link" }).click();
+  await expect(row.getByText("Copied")).toBeVisible();
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(link).toContain("/invite/");
+
+  await page.context().clearCookies();
+  await page.goto(new URL(link).pathname);
+  await page.locator('input[name="name"]').fill("Ivy Invitee");
+  await page.locator('input[name="password"]').fill("password123");
+  await page.getByRole("button", { name: "Join team" }).click();
+  await page.waitForURL("**/dashboard");
+});

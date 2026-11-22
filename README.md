@@ -60,7 +60,7 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 - **Disputes:** raised on work, an invoice or in general, with a message thread. The manager resolves them, or they're escalated to the owner. A disputed invoice can't be paid until the dispute is resolved.
 - **Messages:** direct chats, named group chats with anyone in the company, a company-wide chat and a thread for every project. Unread counts show in the nav, and direct and group messages also notify by email.
 - **Analytics across projects:** spend by month (approved against paid), cost variance per project, change orders, open disputes, the average days from approval to payment and a contractor scorecard.
-- **Notifications:** in-app and by email (through Resend) for work submitted, inspection requests, approvals, corrections, new invoices, invoice approvals, payments, budget alerts, deadlines coming up and overdue work and invoices.
+- **Notifications:** in-app and by email (through Gmail or any SMTP account, or Resend) for work submitted, inspection requests, approvals, corrections, new invoices, invoice approvals, payments, budget alerts, deadlines coming up and overdue work and invoices.
 - **Photo timeline and audit trail:** every photo by day, and every approval, rejection, signature, payment and budget change with who did it and when. The audit trail filters by type, person, date and text, and exports to CSV.
 - **Accounts:** sign-up creates a company, owners invite people by role, and users can reset their password by email.
 - **Simple screens and a tutorial:** short labels, forms tucked behind a + until needed, and a ☰ menu on phones. A short first-run tutorial for each role can be skipped and reopened from the menu.
@@ -114,7 +114,7 @@ The rules live in [`src/lib/permissions.ts`](src/lib/permissions.ts). The work a
 | Data | PostgreSQL with Prisma |
 | Auth | Email and password (bcrypt), signed JWT session cookie (jose), role-based access |
 | Files | Vercel Blob in production, local disk in development |
-| Email | Resend (logged to the console when no key is set) |
+| Email | SMTP such as Gmail, or Resend (logged to the console when neither is set) |
 | Tests | Vitest for business logic, Playwright for end-to-end workflows |
 | CI | GitHub Actions: lint, type check, unit tests, build, end-to-end tests against Postgres |
 
@@ -171,7 +171,7 @@ The end-to-end suite reseeds the demo company before it runs.
 ## Deploying
 
 1. Create a Postgres database on [Neon](https://neon.tech) and copy its connection string with connection pooling turned off.
-2. Import this repo into [Vercel](https://vercel.com/new) and set `DATABASE_URL`, `AUTH_SECRET` (40+ random characters) and `APP_URL` (your site's URL). Optionally set `RESEND_API_KEY` and `EMAIL_FROM` for real emails, and `CRON_SECRET` for the daily alert.
+2. Import this repo into [Vercel](https://vercel.com/new) and set `DATABASE_URL`, `AUTH_SECRET` (40+ random characters) and `APP_URL` (your site's URL). For real emails, set `SMTP_USER` and `SMTP_PASS` (a Gmail address and a Google app password work without a domain), or `RESEND_API_KEY` and `EMAIL_FROM` with a domain verified in Resend. If email fails, the Team page shows each invite link to copy. Optionally set `CRON_SECRET` for the daily alert.
 3. In the Vercel project, go to **Storage**, create a **Blob** store and connect it. This sets `BLOB_READ_WRITE_TOKEN` for photo uploads.
 4. Deploy. The `vercel-build` script runs the database migrations and creates the demo company the first time, so no terminal is needed.
 

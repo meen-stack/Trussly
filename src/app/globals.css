@@ -52,3 +52,8 @@ body {
     linear-gradient(90deg, rgba(255, 193, 7, 0.07) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+/* Grid items default to min-width: auto, so one long row or table would widen the whole page on phones. */
+.grid > * {
+  min-width: 0;
+}

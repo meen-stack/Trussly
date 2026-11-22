@@ -1,6 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { Role } from "@prisma/client";
@@ -94,9 +95,39 @@ export async function inviteUser(_: FormState, form: FormData): Promise<FormStat
   await db.invite.create({
     data: { email: parsed.data.email, role: parsed.data.role as Role, token, companyId: me.companyId, expiresAt: new Date(Date.now() + 7 * 864e5) },
   });
+  revalidatePath("/team");
+  const result = await emailInvite(parsed.data.email, token, me.name, me.company.name);
+  if (result.sent) return { success: `Invite emailed to ${parsed.data.email}.` };
+  return { error: `Invite made, but the email didn't send (${result.reason}). Copy the link under Pending invites and send it yourself.` };
+}
+
+function emailInvite(to: string, token: string, from: string, company: string) {
   const link = appUrl(`/invite/${token}`);
-  await sendEmail(parsed.data.email, `${me.name} invited you to ${me.company.name} on Trussly`, `Join the team here (valid for 7 days):\n\n${link}`);
-  return { success: `Invite sent. You can also share this link: ${link}` };
+  return sendEmail(
+    to,
+    `${from} invited you to ${company} on Trussly`,
+    `${from} invited you to join ${company} on Trussly.\n\nJoin here (valid for 7 days):\n${link}`,
+  );
+}
+
+/** Emails a pending invite again, with a fresh 7 days. */
+export async function resendInvite(_: FormState, form: FormData): Promise<FormState> {
+  const me = await requireUser();
+  if (!can.inviteUsers(me.role)) return { error: "Only owners and admins can invite people." };
+  const invite = await db.invite.findFirst({ where: { id: String(form.get("inviteId")), companyId: me.companyId, usedAt: null } });
+  if (!invite) return { error: "That invite was already used." };
+  await db.invite.update({ where: { id: invite.id }, data: { expiresAt: new Date(Date.now() + 7 * 864e5) } });
+  revalidatePath("/team");
+  const result = await emailInvite(invite.email, invite.token, me.name, me.company.name);
+  return result.sent ? { success: "Sent" } : { error: `Not sent: ${result.reason}` };
+}
+
+/** Withdraws a pending invite so its link stops working. */
+export async function cancelInvite(form: FormData) {
+  const me = await requireUser();
+  if (!can.inviteUsers(me.role)) return;
+  await db.invite.deleteMany({ where: { id: String(form.get("inviteId")), companyId: me.companyId, usedAt: null } });
+  revalidatePath("/team");
 }
 
 export async function acceptInvite(_: FormState, form: FormData): Promise<FormState> {

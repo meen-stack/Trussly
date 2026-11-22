@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { can, ROLE_LABEL } from "@/lib/permissions";
 import { Badge, Card, Field, Input, PageHeader, Select } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
+import { InviteActions } from "@/components/invite-actions";
+import { appUrl, emailConfigured } from "@/lib/email";
 import { inviteUser } from "@/app/actions/auth";
 import { startDirect } from "@/app/actions/messages";
 import { scorecard } from "@/lib/commercial";
@@ -33,7 +35,7 @@ export default async function CompanyTeamPage() {
     <>
       <PageHeader title="Team" subtitle={`${people.length} people at ${user.company.name}`} />
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card className="min-w-0 lg:col-span-2">
           <ul className="divide-y divide-line">
             {people.map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-5 py-3">
@@ -73,8 +75,18 @@ export default async function CompanyTeamPage() {
             ))}
           </ul>
           {invites.length > 0 && (
-            <div className="border-t border-line px-5 py-3 text-sm text-muted">
-              Pending invites: {invites.map((i) => `${i.email} (${ROLE_LABEL[i.role]})`).join(", ")}
+            <div className="border-t border-line px-5 py-3">
+              <p className="text-xs font-medium tracking-wide text-muted uppercase">Pending invites</p>
+              <ul className="mt-2 space-y-2">
+                {invites.map((i) => (
+                  <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate">
+                      {i.email} <span className="text-xs text-muted">· {ROLE_LABEL[i.role]}</span>
+                    </span>
+                    {can.inviteUsers(user.role) && <InviteActions inviteId={i.id} link={appUrl(`/invite/${i.token}`)} />}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </Card>
@@ -88,6 +100,9 @@ export default async function CompanyTeamPage() {
                 Invite someone
               </summary>
               <div className="border-t border-line p-5">
+                {!emailConfigured && (
+                  <p className="mb-4 rounded-lg border border-brand/30 bg-brand-soft px-3 py-2 text-xs text-brand-text">Email isn&apos;t set up. Copy the link after inviting.</p>
+                )}
                 <ActionForm action={inviteUser} submitLabel="Send invite" pendingLabel="Sending…">
                   <Field label="Email">
                     <Input name="email" type="email" required />

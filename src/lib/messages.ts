@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
-import { visibleProjectsWhere } from "./access";
+import { chatScope, visibleProjectsWhere } from "./scope";
 import type { CurrentUser } from "./auth";
 
 export type ChatKind = "direct" | "group" | "company" | "project";
@@ -23,6 +23,8 @@ export async function ensureDefaultChats(user: CurrentUser) {
     ids.push(c.id);
   }
   await db.conversationMember.createMany({ data: ids.map((conversationId) => ({ conversationId, userId: user.id, lastReadAt: new Date(0) })), skipDuplicates: true });
+  // Someone taken off a project leaves its chat too.
+  await db.conversationMember.deleteMany({ where: { userId: user.id, conversation: { projectId: { not: null }, project: { NOT: visibleProjectsWhere(user) } } } });
 }
 
 /** Messages from others that arrived after this person last read each chat. */
@@ -47,7 +49,7 @@ export async function unreadByConversation(userId: string) {
 export async function chatList(user: CurrentUser) {
   const [chats, unread] = await Promise.all([
     db.conversation.findMany({
-      where: { companyId: user.companyId, members: { some: { userId: user.id } } },
+      where: chatScope(user),
       include: {
         project: { select: { name: true } },
         members: { include: { user: { select: { id: true, name: true, role: true, title: true } } } },

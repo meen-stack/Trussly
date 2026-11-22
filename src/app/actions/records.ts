@@ -6,6 +6,7 @@ import type { DocumentCategory, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
+import { canDisputeWork, disputeScope, invoiceScope } from "@/lib/scope";
 import { ROLE_LABEL, can } from "@/lib/permissions";
 import { formatMoney, parseMoney } from "@/lib/money";
 import { disputeAction, fullySigned, missingSigners, nextVersion, validScore } from "@/lib/commercial";
@@ -116,11 +117,11 @@ export async function raiseDispute(projectId: string, _: FormState, form: FormDa
   if (kind === "work") {
     const w = await db.milestone.findFirst({ where: { id: refId, projectId: project.id } });
     if (!w) return { error: "Pick work on this project." };
+    if (!canDisputeWork(user, w)) return { error: "You can only dispute your own work." };
     milestoneId = w.id;
   } else if (kind === "invoice") {
-    const e = await db.expense.findFirst({ where: { id: refId, budgetLine: { projectId: project.id } } });
-    if (!e) return { error: "Pick an invoice on this project." };
-    if (user.role === "CONTRACTOR" && e.submitterId !== user.id) return { error: "You can only dispute your own invoices." };
+    const e = await db.expense.findFirst({ where: { id: refId, budgetLine: { projectId: project.id }, ...invoiceScope(user) } });
+    if (!e) return { error: user.role === "CONTRACTOR" ? "You can only dispute your own invoices." : "Pick an invoice on this project." };
     expenseId = e.id;
   }
   const amount = parsed.data.amount ? parseMoney(parsed.data.amount) : null;
@@ -136,7 +137,7 @@ export async function raiseDispute(projectId: string, _: FormState, form: FormDa
 export async function replyDispute(projectId: string, disputeId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const project = await getProjectForUser(user, projectId);
-  const d = await db.dispute.findFirst({ where: { id: disputeId, projectId: project.id }, include: { messages: { select: { authorId: true } } } });
+  const d = await db.dispute.findFirst({ where: { id: disputeId, projectId: project.id, ...disputeScope(user) }, include: { messages: { select: { authorId: true } } } });
   if (!d) return { error: "Dispute not found." };
   const body = String(form.get("body") ?? "").trim();
   const action = String(form.get("action") ?? "reply");

@@ -5,12 +5,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { chatKind, chatName } from "@/lib/messages";
+import { chatScope } from "@/lib/scope";
+import type { CurrentUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import type { FormState } from "./auth";
 
-async function memberChat(userId: string, conversationId: string) {
+async function memberChat(user: CurrentUser, conversationId: string) {
   return db.conversation.findFirst({
-    where: { id: conversationId, members: { some: { userId } } },
+    where: { id: conversationId, ...chatScope(user) },
     include: { project: { select: { name: true } }, members: { include: { user: { select: { id: true, name: true } } } } },
   });
 }
@@ -47,7 +49,7 @@ export async function createGroup(_: FormState, form: FormData): Promise<FormSta
 /** Adds people to a named group. */
 export async function addToGroup(conversationId: string, form: FormData) {
   const user = await requireUser();
-  const chat = await memberChat(user.id, conversationId);
+  const chat = await memberChat(user, conversationId);
   if (!chat || chatKind(chat) !== "group") return;
   const ids = form.getAll("members").map(String);
   const people = await db.user.findMany({ where: { id: { in: ids }, companyId: user.companyId }, select: { id: true, name: true } });
@@ -60,7 +62,7 @@ export async function addToGroup(conversationId: string, form: FormData) {
 
 export async function leaveGroup(conversationId: string) {
   const user = await requireUser();
-  const chat = await memberChat(user.id, conversationId);
+  const chat = await memberChat(user, conversationId);
   if (!chat || chatKind(chat) !== "group") return;
   await db.conversationMember.deleteMany({ where: { conversationId: chat.id, userId: user.id } });
   await db.message.create({ data: { conversationId: chat.id, authorId: user.id, body: `${user.name} left the group.` } });
@@ -69,7 +71,7 @@ export async function leaveGroup(conversationId: string) {
 
 export async function sendMessage(conversationId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
-  const chat = await memberChat(user.id, conversationId);
+  const chat = await memberChat(user, conversationId);
   if (!chat) return { error: "Chat not found." };
   const body = String(form.get("body") ?? "").trim();
   if (!body) return { error: "Write a message." };

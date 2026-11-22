@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { AppNav } from "@/components/app-nav";
+import { MobileMenu } from "@/components/mobile-menu";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ROLE_LABEL, can } from "@/lib/permissions";
@@ -53,13 +54,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <header className="sticky top-0 z-20 bg-steel lg:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <Logo dark href="/dashboard" />
-          <form action={logout}>
-            <button className="rounded-lg p-2 text-white/70" aria-label="Log out">
-              <LogOut className="h-4 w-4" />
-            </button>
-          </form>
+          <MobileMenu counts={counts} finance={can.seeFinance(user.role)} analytics={can.seeAnalytics(user.role)} />
         </div>
-        <AppNav counts={counts} finance={can.seeFinance(user.role)} analytics={can.seeAnalytics(user.role)} mobile />
       </header>
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-6xl">{children}</div>

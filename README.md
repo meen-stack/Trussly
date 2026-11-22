@@ -74,7 +74,7 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 | ![Analytics](docs/screenshots/analytics.png) | ![Messages](docs/screenshots/chat.png) |
 | ![Product tour](docs/screenshots/about.png) | ![Photo timeline](docs/screenshots/photos.png) |
 
-<p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"> <img src="docs/screenshots/mobile-chat.png" alt="A direct chat on a phone" width="300"></p>
+<p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"> <img src="docs/screenshots/mobile-chat.png" alt="A direct chat on a phone" width="300"> <img src="docs/screenshots/mobile-menu-project.png" alt="The phone menu, with every section of the current project" width="300"></p>
 
 ## Roles and permissions
 

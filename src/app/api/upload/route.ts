@@ -1,7 +1,7 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { visibleProjectsWhere } from "@/lib/access";
+import { chatScope, visibleProjectsWhere } from "@/lib/scope";
 import { IMAGE_TYPES, MAX_VIDEO_MB, VIDEO_TYPES } from "@/lib/media";
 
 /**
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
           scope === "projects"
             ? await db.project.findFirst({ where: { id, ...visibleProjectsWhere(user) }, select: { id: true } })
             : scope === "chats"
-              ? await db.conversation.findFirst({ where: { id, members: { some: { userId: user.id } } }, select: { id: true } })
+              ? await db.conversation.findFirst({ where: { id, ...chatScope(user) }, select: { id: true } })
               : null;
         if (!allowed) throw new Error("You can't upload there.");
         return {

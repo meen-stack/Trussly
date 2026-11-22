@@ -75,8 +75,8 @@ export default async function Landing() {
               See your site <span className="text-brand">every day</span>, from anywhere.
             </h1>
             <p className="mt-5 max-w-lg text-lg text-white/70">
-              Trussly gives developers and investors daily site reports, photo evidence, milestone sign-off and budget against actual spend,
-              so overruns get caught while they&apos;re still small.
+              Trussly gives developers and investors daily site reports, photo evidence, milestone sign-off and budget against actual spend, so overruns get
+              caught while they&apos;re still small.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <ButtonLink href="#demo" className="px-5 py-3 text-base">
@@ -100,7 +100,12 @@ export default async function Landing() {
         </div>
         <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-muted sm:px-6">
           Overrun figures: study of projects across 20 countries over 70 years, via{" "}
-          <a className="underline" href="https://www.propelleraero.com/blog/10-construction-project-cost-overrun-statistics-you-need-to-hear/" target="_blank" rel="noreferrer">
+          <a
+            className="underline"
+            href="https://www.propelleraero.com/blog/10-construction-project-cost-overrun-statistics-you-need-to-hear/"
+            target="_blank"
+            rel="noreferrer"
+          >
             Propeller
           </a>
           .

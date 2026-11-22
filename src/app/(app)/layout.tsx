@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { AppNav } from "@/components/app-nav";
 import { MobileMenu } from "@/components/mobile-menu";
+import { Tour } from "@/components/tour";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ROLE_LABEL, can } from "@/lib/permissions";
@@ -57,6 +58,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           <MobileMenu counts={counts} finance={can.seeFinance(user.role)} analytics={can.seeAnalytics(user.role)} />
         </div>
       </header>
+      <Tour userId={user.id} role={user.role} name={user.name} />
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>

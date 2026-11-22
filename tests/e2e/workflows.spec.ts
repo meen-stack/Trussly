@@ -68,6 +68,7 @@ test("work: contractor submits, supervisor inspects, manager approves, owner giv
 test("invoices: unverified work can't be approved", async ({ page }) => {
   await loginAs(page, "CONTRACTOR");
   await openProject(page, PROJECT, "Budget & spend");
+  await page.locator("summary", { hasText: "Submit an invoice" }).click();
   await page.locator('select[name="budgetLineId"]').selectOption({ label: "Structure" });
   await page.locator('select[name="milestoneId"]').selectOption({ label: "Level 2 slab poured" });
   await page.locator('input[name="vendor"]').fill("E2E Slab Claim");
@@ -86,6 +87,7 @@ test("invoices: unverified work can't be approved", async ({ page }) => {
 test("payments: manager and owner approve, finance pays in two parts", async ({ page }) => {
   await loginAs(page, "CONTRACTOR");
   await openProject(page, PROJECT, "Budget & spend");
+  await page.locator("summary", { hasText: "Submit an invoice" }).click();
   await page.locator('select[name="budgetLineId"]').selectOption({ label: "Roofing" });
   await page.locator('input[name="vendor"]').fill("E2E Roofing Supplies");
   await page.locator('input[name="description"]').fill("Roof membrane");
@@ -138,6 +140,7 @@ test("roles: contractor can't create projects, accountant can't approve work", a
 
 test("signup creates a workspace and a project", async ({ page }) => {
   await page.context().clearCookies();
+  await page.addInitScript(() => localStorage.setItem("trussly-tour-off", "1"));
   const email = `e2e-${Date.now()}@example.com`;
   await page.goto("/signup");
   await page.locator('input[name="name"]').fill("Test Owner");

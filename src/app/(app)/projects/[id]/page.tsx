@@ -18,7 +18,9 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
   const currency = user.company.currency;
   const h = health(s);
   const photos = await db.photo.findMany({
-    where: { OR: [{ report: { projectId: id } }, { milestone: { projectId: id } }] },
+    where: {
+      OR: [{ report: { projectId: id } }, { milestone: { projectId: id } }],
+    },
     orderBy: { takenAt: "desc" },
     take: 6,
   });
@@ -29,7 +31,12 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Health" value={<Badge tone={h.tone}>{h.label}</Badge>} sub={s.behindBy > 0 ? `${s.behindBy} pts behind plan` : "At or ahead of plan"} />
-        <Stat label="Progress" value={`${s.progress}%`} sub={`${s.planned}% planned by today`} tone={s.behindBy > 15 ? "bad" : s.behindBy > 5 ? "warn" : undefined} />
+        <Stat
+          label="Progress"
+          value={`${s.progress}%`}
+          sub={`${s.planned}% planned by today`}
+          tone={s.behindBy > 15 ? "bad" : s.behindBy > 5 ? "warn" : undefined}
+        />
         <Stat
           label="Spent"
           value={formatMoney(s.budget.spent, currency, true)}
@@ -39,7 +46,11 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
         <Stat
           label="Forecast final cost"
           value={s.forecast ? formatMoney(s.forecast, currency, true) : "—"}
-          sub={s.forecast ? `${s.forecast > s.budget.budgeted ? "+" : ""}${formatMoney(s.forecast - s.budget.budgeted, currency, true)} vs budget` : "Needs more progress data"}
+          sub={
+            s.forecast
+              ? `${s.forecast > s.budget.budgeted ? "+" : ""}${formatMoney(s.forecast - s.budget.budgeted, currency, true)} vs budget`
+              : "Needs more progress data"
+          }
           tone={s.forecast && s.forecast > s.budget.budgeted * 1.1 ? "bad" : s.forecast && s.forecast > s.budget.budgeted ? "warn" : undefined}
         />
       </div>
@@ -56,10 +67,8 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Progress vs plan" subtitle="Site-reported completion against a straight-line schedule" />
-          <div className="p-4">
-            {s.progressSeries.length > 1 ? <ProgressChart data={s.progressSeries} /> : <EmptyState title="Not enough reports yet" body="The chart appears after two daily reports." />}
-          </div>
+          <CardHeader title="Progress vs plan" />
+          <div className="p-4">{s.progressSeries.length > 1 ? <ProgressChart data={s.progressSeries} /> : <EmptyState title="Not enough reports yet" />}</div>
         </Card>
         <Card>
           <CardHeader title="Approved spend over time" subtitle={`Budget ${formatMoney(s.budget.budgeted, currency)}`} />
@@ -71,9 +80,23 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Budget vs actual by line" action={<Link href={`/projects/${id}/budget`} className="text-sm text-brand-text hover:underline">Details</Link>} />
+          <CardHeader
+            title="Budget vs actual by line"
+            action={
+              <Link href={`/projects/${id}/budget`} className="text-sm text-brand-text hover:underline">
+                Details
+              </Link>
+            }
+          />
           <div className="p-4">
-            <BudgetChart currency={currency} data={s.budget.lines.map((l) => ({ category: l.category, budgeted: l.budgeted / 100, spent: l.spent / 100 }))} />
+            <BudgetChart
+              currency={currency}
+              data={s.budget.lines.map((l) => ({
+                category: l.category,
+                budgeted: l.budgeted / 100,
+                spent: l.spent / 100,
+              }))}
+            />
           </div>
         </Card>
         <div className="space-y-6">
@@ -103,7 +126,14 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
             </div>
           </Card>
           <Card>
-            <CardHeader title="Latest photos" action={<Link href={`/projects/${id}/photos`} className="text-sm text-brand-text hover:underline">All</Link>} />
+            <CardHeader
+              title="Latest photos"
+              action={
+                <Link href={`/projects/${id}/photos`} className="text-sm text-brand-text hover:underline">
+                  All
+                </Link>
+              }
+            />
             {photos.length ? (
               <div className="grid grid-cols-3 gap-1 p-2">
                 {photos.map((p) => (

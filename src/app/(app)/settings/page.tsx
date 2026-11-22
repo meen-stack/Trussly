@@ -48,7 +48,7 @@ export default async function SettingsPage() {
                     <option value="EUR">Euro (EUR)</option>
                   </Select>
                 </Field>
-                <Field label="Owner approval limit" hint="Invoices above this need the owner as well as the manager.">
+                <Field label="Owner approval limit">
                   <Input name="threshold" defaultValue={(c.approvalThreshold / 100).toFixed(0)} inputMode="decimal" />
                 </Field>
               </div>

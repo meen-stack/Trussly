@@ -8,14 +8,21 @@ import { db } from "@/lib/db";
 import { ROLE_LABEL, can } from "@/lib/permissions";
 import { fullySigned, missingSigners } from "@/lib/commercial";
 import { shortPrint } from "@/lib/signature";
-import { Badge, Card, CardHeader, EmptyState, Field, Input, Select } from "@/components/ui";
+import { Badge, Card, EmptyState, Field, Input, Select } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { InlineForm } from "@/components/decision-form";
 import { signDocument, uploadDocument } from "@/app/actions/records";
 
 export const metadata: Metadata = { title: "Documents" };
 
-const CATEGORY: Record<DocumentCategory, string> = { DRAWING: "Drawings", CONTRACT: "Contracts", PERMIT: "Permits", SPECIFICATION: "Specifications", REPORT: "Reports", OTHER: "Other" };
+const CATEGORY: Record<DocumentCategory, string> = {
+  DRAWING: "Drawings",
+  CONTRACT: "Contracts",
+  PERMIT: "Permits",
+  SPECIFICATION: "Specifications",
+  REPORT: "Reports",
+  OTHER: "Other",
+};
 
 export default async function DocumentsPage({ params, searchParams }: PageProps<"/projects/[id]/documents">) {
   const { id } = await params;
@@ -24,13 +31,20 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
   const project = await getProjectForUser(user, id);
   const [docs, people] = await Promise.all([
     db.document.findMany({
-    where: { projectId: project.id },
-    include: { uploadedBy: true, signatures: { include: { user: true }, orderBy: { signedAt: "asc" } } },
-    orderBy: [{ title: "asc" }, { version: "desc" }],
+      where: { projectId: project.id },
+      include: {
+        uploadedBy: true,
+        signatures: { include: { user: true }, orderBy: { signedAt: "asc" } },
+      },
+      orderBy: [{ title: "asc" }, { version: "desc" }],
     }),
     // Who can be asked to sign: owners and the project team, except the accountant.
     db.user.findMany({
-      where: { companyId: user.companyId, role: { not: "FINANCE" }, OR: [{ role: "OWNER" }, { memberships: { some: { projectId: project.id } } }] },
+      where: {
+        companyId: user.companyId,
+        role: { not: "FINANCE" },
+        OR: [{ role: "OWNER" }, { memberships: { some: { projectId: project.id } } }],
+      },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
   ]);
@@ -48,15 +62,32 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <div className="flex flex-wrap gap-2 text-sm">
-          <a href="?" className={!category ? "rounded-full bg-steel px-3 py-1 text-white" : "rounded-full border border-line px-3 py-1 text-muted hover:text-ink"}>All</a>
+          <a
+            href="?"
+            className={!category ? "rounded-full bg-steel px-3 py-1 text-white" : "rounded-full border border-line px-3 py-1 text-muted hover:text-ink"}
+          >
+            All
+          </a>
           {(Object.keys(CATEGORY) as DocumentCategory[]).map((c) => (
-            <a key={c} href={`?category=${c}`} className={category === c ? "rounded-full bg-steel px-3 py-1 text-white" : "rounded-full border border-line px-3 py-1 text-muted hover:text-ink"}>
+            <a
+              key={c}
+              href={`?category=${c}`}
+              className={category === c ? "rounded-full bg-steel px-3 py-1 text-white" : "rounded-full border border-line px-3 py-1 text-muted hover:text-ink"}
+            >
               {CATEGORY[c]}
             </a>
           ))}
         </div>
-        {toSign.length > 0 && <p className="rounded-lg border border-brand/30 bg-brand-soft px-4 py-2 text-sm text-brand-text">{toSign.length} document{toSign.length === 1 ? " needs" : "s need"} your signature.</p>}
-        {latest.length === 0 && <Card><EmptyState title="No documents" body="Upload drawings, contracts and permits. Contracts can be signed here by each party." /></Card>}
+        {toSign.length > 0 && (
+          <p className="rounded-lg border border-brand/30 bg-brand-soft px-4 py-2 text-sm text-brand-text">
+            {toSign.length} document{toSign.length === 1 ? " needs" : "s need"} your signature.
+          </p>
+        )}
+        {latest.length === 0 && (
+          <Card>
+            <EmptyState title="No documents" />
+          </Card>
+        )}
         {latest.map(({ doc, older }) => {
           const missing = missingSigners(doc.signerIds, doc.signatures);
           const signed = fullySigned(doc.signerIds, doc.signatures);
@@ -67,10 +98,17 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
                   <FileText className="mt-0.5 h-5 w-5 shrink-0 text-brand-text" />
                   <span className="min-w-0">
                     <span className="block font-semibold">{doc.title}</span>
-                    <span className="block text-xs text-muted">{CATEGORY[doc.category]} · v{doc.version} · {doc.fileName} · {doc.uploadedBy.name}, {format(doc.createdAt, "MMM d, yyyy")}</span>
+                    <span className="block text-xs text-muted">
+                      {CATEGORY[doc.category]} · v{doc.version} · {doc.fileName} · {doc.uploadedBy.name}, {format(doc.createdAt, "MMM d, yyyy")}
+                    </span>
                   </span>
                 </a>
-                {doc.signerIds.length > 0 && (signed ? <Badge tone="ok">Fully signed</Badge> : <Badge tone="warn">Awaiting {missing.map((id) => nameOf.get(id) ?? "a former member").join(", ")}</Badge>)}
+                {doc.signerIds.length > 0 &&
+                  (signed ? (
+                    <Badge tone="ok">Fully signed</Badge>
+                  ) : (
+                    <Badge tone="warn">Awaiting {missing.map((id) => nameOf.get(id) ?? "a former member").join(", ")}</Badge>
+                  ))}
               </div>
               {doc.signatures.length > 0 && (
                 <ul className="mt-3 space-y-1.5">
@@ -78,7 +116,9 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
                     <li key={s.id} className="flex items-center gap-2 text-xs">
                       <PenLine className="h-3.5 w-3.5 text-ok" />
                       <span className="font-display text-sm italic">{s.signedName}</span>
-                      <span className="text-muted">{ROLE_LABEL[s.role]} · {format(s.signedAt, "MMM d, h:mm a")} · <span className="font-mono">{shortPrint(s.fingerprint)}</span></span>
+                      <span className="text-muted">
+                        {ROLE_LABEL[s.role]} · {format(s.signedAt, "MMM d, h:mm a")} · <span className="font-mono">{shortPrint(s.fingerprint)}</span>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -88,7 +128,8 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
                   <InlineForm action={signDocument.bind(null, project.id, doc.id)} submitLabel="Sign document" variant="success">
                     <Input name="signature" placeholder={`Type your full name: ${user.name}`} autoComplete="off" className="font-display italic" />
                     <label className="flex items-start gap-2 text-xs">
-                      <input type="checkbox" name="agree" className="mt-0.5 accent-[#ffc107]" />I have read version {doc.version} and agree to sign it electronically as {user.name}, {ROLE_LABEL[user.role]}.
+                      <input type="checkbox" name="agree" className="mt-0.5 accent-[#ffc107]" />I have read version {doc.version} and agree to sign it
+                      electronically as {user.name}, {ROLE_LABEL[user.role]}.
                     </label>
                   </InlineForm>
                 </div>
@@ -99,7 +140,9 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
                   <ul className="mt-1 space-y-1">
                     {older.map((o) => (
                       <li key={o.id}>
-                        <a href={o.url} target="_blank" rel="noreferrer" className="hover:underline">v{o.version} · {o.fileName} · {format(o.createdAt, "MMM d, yyyy")}</a>
+                        <a href={o.url} target="_blank" rel="noreferrer" className="hover:underline">
+                          v{o.version} · {o.fileName} · {format(o.createdAt, "MMM d, yyyy")}
+                        </a>
                       </li>
                     ))}
                   </ul>
@@ -112,27 +155,45 @@ export default async function DocumentsPage({ params, searchParams }: PageProps<
 
       {can.uploadDocument(user.role) && (
         <Card className="self-start">
-          <CardHeader title="Upload a document" subtitle="Same title as an existing document makes a new version." />
-          <div className="p-5">
-            <ActionForm action={uploadDocument.bind(null, project.id)} submitLabel="Upload">
-              <Field label="Title"><Input name="title" placeholder="Structural drawings" required /></Field>
-              <Field label="Category">
-                <Select name="category" defaultValue="DRAWING">
-                  {(Object.keys(CATEGORY) as DocumentCategory[]).map((c) => <option key={c} value={c}>{CATEGORY[c].replace(/s$/, "")}</option>)}
-                </Select>
-              </Field>
-              <Field label="File" hint="PDF or image, up to 8 MB."><Input name="file" type="file" accept="application/pdf,image/*" required /></Field>
-              <fieldset className="space-y-1.5">
-                <legend className="text-sm font-medium">Needs signatures from</legend>
-                {people.map((p) => (
-                  <label key={p.id} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="signers" value={p.id} className="accent-[#ffc107]" /> {p.name}
-                    <span className="text-xs text-muted">{ROLE_LABEL[p.role]}{p.title ? ` · ${p.title}` : ""}</span>
-                  </label>
-                ))}
-              </fieldset>
-            </ActionForm>
-          </div>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 font-display font-semibold [&::-webkit-details-marker]:hidden">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-lg leading-none text-brand-ink transition-transform group-open:rotate-45">
+                +
+              </span>
+              Upload a document
+            </summary>
+            <div className="border-t border-line p-5">
+              <ActionForm action={uploadDocument.bind(null, project.id)} submitLabel="Upload">
+                <Field label="Title">
+                  <Input name="title" placeholder="Structural drawings" required />
+                </Field>
+                <Field label="Category">
+                  <Select name="category" defaultValue="DRAWING">
+                    {(Object.keys(CATEGORY) as DocumentCategory[]).map((c) => (
+                      <option key={c} value={c}>
+                        {CATEGORY[c].replace(/s$/, "")}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="File">
+                  <Input name="file" type="file" accept="application/pdf,image/*" required />
+                </Field>
+                <fieldset className="space-y-1.5">
+                  <legend className="text-sm font-medium">Needs signatures from</legend>
+                  {people.map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" name="signers" value={p.id} className="accent-[#ffc107]" /> {p.name}
+                      <span className="text-xs text-muted">
+                        {ROLE_LABEL[p.role]}
+                        {p.title ? ` · ${p.title}` : ""}
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              </ActionForm>
+            </div>
+          </details>
         </Card>
       )}
     </div>

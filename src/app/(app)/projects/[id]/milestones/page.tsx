@@ -8,7 +8,7 @@ import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
 import { workOptions } from "@/lib/workflow";
 import { paidOf } from "@/lib/status";
-import { Card, CardHeader, EmptyState, Field, Input, Select, Textarea, cn } from "@/components/ui";
+import { Card, EmptyState, Field, Input, Select, Textarea, cn } from "@/components/ui";
 import { WorkBadge, WorkPaymentBadge } from "@/components/status";
 import { ActionForm } from "@/components/action-form";
 import { WorkActions } from "@/components/work-actions";
@@ -21,7 +21,16 @@ import { ratingScore } from "@/lib/commercial";
 export const metadata: Metadata = { title: "Work" };
 
 /** How far along the verification chain each status has got. */
-const REACHED: Record<string, number> = { NOT_STARTED: -1, IN_PROGRESS: -1, CORRECTIONS: -1, REJECTED: -1, SUBMITTED: 0, INSPECTED: 1, AWAITING_OWNER: 2, VERIFIED: 4 };
+const REACHED: Record<string, number> = {
+  NOT_STARTED: -1,
+  IN_PROGRESS: -1,
+  CORRECTIONS: -1,
+  REJECTED: -1,
+  SUBMITTED: 0,
+  INSPECTED: 1,
+  AWAITING_OWNER: 2,
+  VERIFIED: 4,
+};
 
 export default async function WorkPage({ params }: PageProps<"/projects/[id]/milestones">) {
   const { id } = await params;
@@ -31,10 +40,24 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
   const [work, contractors] = await Promise.all([
     db.milestone.findMany({
       where: { projectId: project.id },
-      include: { photos: true, ratings: true, assignee: { select: { name: true, title: true } }, invoices: { include: { payments: true }, orderBy: { createdAt: "asc" } } },
+      include: {
+        photos: true,
+        ratings: true,
+        assignee: { select: { name: true, title: true } },
+        invoices: {
+          include: { payments: true },
+          orderBy: { createdAt: "asc" },
+        },
+      },
       orderBy: [{ sortOrder: "asc" }, { dueDate: "asc" }],
     }),
-    db.user.findMany({ where: { role: "CONTRACTOR", memberships: { some: { projectId: project.id } } }, orderBy: { name: "asc" } }),
+    db.user.findMany({
+      where: {
+        role: "CONTRACTOR",
+        memberships: { some: { projectId: project.id } },
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
   const verified = work.filter((m) => m.status === "VERIFIED").reduce((s, m) => s + m.paymentAmount, 0);
   const total = work.reduce((s, m) => s + m.paymentAmount, 0);
@@ -43,28 +66,28 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
-        <p className="text-sm text-muted">
-          {formatMoney(verified, currency)} of {formatMoney(total, currency)} of work verified, {formatMoney(paid, currency)} paid. Work and payment are tracked separately: work is verified by the site supervisor and manager
-          {` (and the owner above ${formatMoney(threshold, currency)})`}, and only verified work can be invoiced for approval.
-        </p>
+        <div className="flex flex-wrap gap-2 text-sm">
+          <span className="rounded-full bg-ok/10 px-3 py-1 font-medium text-ok">{formatMoney(verified, currency)} verified</span>
+          <span className="rounded-full bg-surface px-3 py-1 text-muted ring-1 ring-line">{formatMoney(total, currency)} total</span>
+          <span className="rounded-full bg-surface px-3 py-1 text-muted ring-1 ring-line">{formatMoney(paid, currency)} paid</span>
+        </div>
         {work.length === 0 && (
           <Card>
-            <EmptyState title="No work yet" body="Add work packages and milestones, assign them to contractors and tie them to payments." />
+            <EmptyState title="No work yet" />
           </Card>
         )}
-        {work.map((m, i) => {
+        {work.map((m) => {
           const mine = user.role !== "CONTRACTOR" || !m.assigneeId || m.assigneeId === user.id;
           const options = mine ? workOptions(m.status, user.role, m.paymentAmount, threshold) : [];
           const reached = REACHED[m.status];
           const needsOwner = m.paymentAmount > threshold;
-          const steps = ["Submitted with photos", "Supervisor inspected", "Manager approved", ...(needsOwner ? ["Owner approved"] : []), "Verified"];
+          const steps = ["Submitted", "Inspected", "Manager", ...(needsOwner ? ["Owner"] : []), "Verified"];
           const done = (step: number) => (m.status === "VERIFIED" ? true : step <= reached && step < steps.length - 1);
           const overdue = m.status !== "VERIFIED" && m.status !== "REJECTED" && m.dueDate < new Date();
           return (
             <Card key={m.id} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-xs text-muted">Work {i + 1}</p>
                   <h3 className="font-display text-lg font-semibold">{m.title}</h3>
                   {m.description && <p className="mt-1 text-sm text-muted">{m.description}</p>}
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
@@ -93,7 +116,12 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
               <ol className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">
                 {steps.map((label, step) => (
                   <li key={label} className="flex items-center gap-1.5">
-                    <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border", done(step) ? "border-ok bg-ok text-white" : "border-line text-muted")}>
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                        done(step) ? "border-ok bg-ok text-white" : "border-line text-muted",
+                      )}
+                    >
                       {done(step) ? <Check className="h-3 w-3" /> : step + 1}
                     </span>
                     <span className={done(step) ? "font-medium" : "text-muted"}>{label}</span>
@@ -101,13 +129,17 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
                 ))}
               </ol>
 
-              {m.submittedNote && <p className="mt-3 text-sm"><span className="font-medium">Contractor:</span> {m.submittedNote}</p>}
-              {m.inspectNote && (
+              {m.status !== "VERIFIED" && m.submittedNote && (
+                <p className="mt-3 text-sm">
+                  <span className="font-medium">Contractor:</span> {m.submittedNote}
+                </p>
+              )}
+              {m.status !== "VERIFIED" && m.inspectNote && (
                 <p className={cn("mt-1 text-sm", m.status === "CORRECTIONS" && !m.reviewNote && "text-bad")}>
                   <span className="font-medium">Inspection:</span> {m.inspectNote}
                 </p>
               )}
-              {m.reviewNote && (
+              {m.status !== "VERIFIED" && m.reviewNote && (
                 <p className={cn("mt-1 text-sm", (m.status === "CORRECTIONS" || m.status === "REJECTED") && "text-bad")}>
                   <span className="font-medium">Review:</span> {m.reviewNote}
                 </p>
@@ -125,7 +157,8 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
                 <p className="mt-3 text-sm">
                   <span className="font-medium">Rating {ratingScore(m.ratings[0]).toFixed(1)}/5</span>
                   <span className="text-muted">
-                    {" "}· quality {m.ratings[0].quality}, timeliness {m.ratings[0].timeliness}, safety {m.ratings[0].safety}
+                    {" "}
+                    · quality {m.ratings[0].quality}, timeliness {m.ratings[0].timeliness}, safety {m.ratings[0].safety}
                     {m.ratings[0].comment ? ` · "${m.ratings[0].comment}"` : ""}
                   </span>
                 </p>
@@ -139,7 +172,11 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
                         <label key={k} className="space-y-1 text-xs capitalize">
                           {k}
                           <Select name={k} defaultValue="4">
-                            {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n}</option>)}
+                            {[5, 4, 3, 2, 1].map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
                           </Select>
                         </label>
                       ))}
@@ -154,34 +191,41 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
       </div>
       {can.manageProject(user.role) && (
         <Card className="self-start">
-          <CardHeader title="Add work" subtitle="A work package or milestone, tied to a payment." />
-          <div className="p-5">
-            <ActionForm action={addMilestone.bind(null, project.id)} submitLabel="Add work">
-              <Field label="Title">
-                <Input name="title" placeholder="Roof structure complete" required />
-              </Field>
-              <Field label="Description">
-                <Textarea name="description" rows={2} />
-              </Field>
-              <Field label="Assigned contractor">
-                <Select name="assigneeId" defaultValue="">
-                  <option value="">Unassigned</option>
-                  {contractors.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                      {c.title ? `, ${c.title}` : ""}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Deadline">
-                <Input name="dueDate" type="date" required />
-              </Field>
-              <Field label={`Value (${currency})`} hint={`Over ${formatMoney(threshold, currency)} needs the owner's final approval.`}>
-                <Input name="payment" inputMode="decimal" placeholder="25000" />
-              </Field>
-            </ActionForm>
-          </div>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 font-display font-semibold [&::-webkit-details-marker]:hidden">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-lg leading-none text-brand-ink transition-transform group-open:rotate-45">
+                +
+              </span>
+              Add work
+            </summary>
+            <div className="border-t border-line p-5">
+              <ActionForm action={addMilestone.bind(null, project.id)} submitLabel="Add work">
+                <Field label="Title">
+                  <Input name="title" placeholder="Roof structure complete" required />
+                </Field>
+                <Field label="Description">
+                  <Textarea name="description" rows={2} />
+                </Field>
+                <Field label="Assigned contractor">
+                  <Select name="assigneeId" defaultValue="">
+                    <option value="">Unassigned</option>
+                    {contractors.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.title ? `, ${c.title}` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Deadline">
+                  <Input name="dueDate" type="date" required />
+                </Field>
+                <Field label={`Value (${currency})`}>
+                  <Input name="payment" inputMode="decimal" placeholder="25000" />
+                </Field>
+              </ActionForm>
+            </div>
+          </details>
         </Card>
       )}
     </div>

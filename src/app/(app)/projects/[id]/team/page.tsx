@@ -13,20 +13,31 @@ export default async function TeamPage({ params }: PageProps<"/projects/[id]/tea
   const { id } = await params;
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
-  const members = await db.projectMember.findMany({ where: { projectId: project.id }, include: { user: true }, orderBy: { user: { role: "asc" } } });
+  const members = await db.projectMember.findMany({
+    where: { projectId: project.id },
+    include: { user: true },
+    orderBy: { user: { role: "asc" } },
+  });
   const memberIds = new Set(members.map((m) => m.userId));
-  const others = await db.user.findMany({ where: { companyId: user.companyId, id: { notIn: [...memberIds] } }, orderBy: { name: "asc" } });
+  const others = await db.user.findMany({
+    where: { companyId: user.companyId, id: { notIn: [...memberIds] } },
+    orderBy: { name: "asc" },
+  });
   const manage = can.manageProject(user.role);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
-        <CardHeader title="Project team" subtitle="Owners, admins and accountants can see every project automatically." />
+        <CardHeader title="Project team" />
         <ul className="divide-y divide-line">
           {members.map((m) => (
             <li key={m.id} className="flex items-center gap-3 px-5 py-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-text">
-                {m.user.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
+                {m.user.name
+                  .split(" ")
+                  .map((p) => p[0])
+                  .slice(0, 2)
+                  .join("")}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{m.user.name}</p>
@@ -45,22 +56,29 @@ export default async function TeamPage({ params }: PageProps<"/projects/[id]/tea
       </Card>
       {manage && (
         <Card className="self-start">
-          <CardHeader title="Add someone" subtitle="Invite new people from the Team page first." />
-          <div className="p-5">
-            {others.length === 0 ? (
-              <p className="text-sm text-muted">Everyone in your company is already on this project.</p>
-            ) : (
-              <ActionForm action={addMember.bind(null, project.id)} submitLabel="Add to project">
-                <Select name="userId" required>
-                  {others.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name} · {ROLE_LABEL[o.role]}
-                    </option>
-                  ))}
-                </Select>
-              </ActionForm>
-            )}
-          </div>
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 font-display font-semibold [&::-webkit-details-marker]:hidden">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-lg leading-none text-brand-ink transition-transform group-open:rotate-45">
+                +
+              </span>
+              Add someone
+            </summary>
+            <div className="border-t border-line p-5">
+              {others.length === 0 ? (
+                <p className="text-sm text-muted">Everyone in your company is already on this project.</p>
+              ) : (
+                <ActionForm action={addMember.bind(null, project.id)} submitLabel="Add to project">
+                  <Select name="userId" required>
+                    {others.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name} · {ROLE_LABEL[o.role]}
+                      </option>
+                    ))}
+                  </Select>
+                </ActionForm>
+              )}
+            </div>
+          </details>
         </Card>
       )}
     </div>

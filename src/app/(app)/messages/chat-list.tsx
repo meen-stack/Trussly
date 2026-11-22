@@ -7,18 +7,32 @@ import { cn } from "@/components/ui";
 type Chat = Awaited<ReturnType<typeof chatList>>[number];
 
 const ICON = { company: Building2, project: HardHat, group: Users };
-const KIND = { company: "Everyone", project: "Project", group: "Group", direct: "" };
+const KIND = {
+  company: "Everyone",
+  project: "Project",
+  group: "Group",
+  direct: "",
+};
 
 export function ChatList({ chats, activeId, me }: { chats: Chat[]; activeId?: string; me: string }) {
   return (
     <ul className="divide-y divide-line">
       {chats.map((c) => {
         const Icon = c.kind === "direct" ? null : ICON[c.kind];
-        const initials = c.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+        const initials = c.name
+          .split(" ")
+          .map((p) => p[0])
+          .slice(0, 2)
+          .join("");
         return (
           <li key={c.id}>
             <Link href={`/messages/${c.id}`} className={cn("flex items-center gap-3 px-4 py-3 hover:bg-bg", c.id === activeId && "bg-brand-soft")}>
-              <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold", c.kind === "direct" ? "bg-brand-soft text-brand-text" : "bg-steel text-white")}>
+              <span
+                className={cn(
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                  c.kind === "direct" ? "bg-brand-soft text-brand-text" : "bg-steel text-white",
+                )}
+              >
                 {Icon ? <Icon className="h-4 w-4" /> : initials}
               </span>
               <span className="min-w-0 flex-1">

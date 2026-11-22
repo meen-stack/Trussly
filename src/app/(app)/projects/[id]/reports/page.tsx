@@ -32,7 +32,7 @@ export default async function ReportsPage({ params }: PageProps<"/projects/[id]/
       </div>
       <Card>
         {reports.length === 0 ? (
-          <EmptyState title="No reports yet" body="Site supervisors file one report per day with photos." />
+          <EmptyState title="No reports yet" />
         ) : (
           <ul className="divide-y divide-line">
             {reports.map((r) => (

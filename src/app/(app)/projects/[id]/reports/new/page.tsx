@@ -15,7 +15,10 @@ export default async function NewReportPage({ params }: PageProps<"/projects/[id
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
   if (!can.submitReport(user.role)) redirect(`/projects/${id}/reports`);
-  const last = await db.dailyReport.findFirst({ where: { projectId: id }, orderBy: { date: "desc" } });
+  const last = await db.dailyReport.findFirst({
+    where: { projectId: id },
+    orderBy: { date: "desc" },
+  });
   return (
     <Card className="max-w-2xl p-6">
       <h2 className="font-display mb-5 text-lg font-semibold">Daily site report</h2>

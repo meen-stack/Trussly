@@ -19,20 +19,45 @@ export default async function ChatPage({ params }: PageProps<"/messages/[id]">) 
   const user = await requireUser();
   await ensureDefaultChats(user);
   const chat = await db.conversation.findFirst({
-    where: { id, companyId: user.companyId, members: { some: { userId: user.id } } },
+    where: {
+      id,
+      companyId: user.companyId,
+      members: { some: { userId: user.id } },
+    },
     include: {
       project: { select: { id: true, name: true } },
-      members: { include: { user: { select: { id: true, name: true, role: true, title: true } } } },
-      messages: { include: { author: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: "desc" }, take: 200 },
+      members: {
+        include: {
+          user: { select: { id: true, name: true, role: true, title: true } },
+        },
+      },
+      messages: {
+        include: { author: { select: { id: true, name: true, role: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      },
     },
   });
   if (!chat) notFound();
   // Opening the chat marks it read.
-  await db.conversationMember.update({ where: { conversationId_userId: { conversationId: chat.id, userId: user.id } }, data: { lastReadAt: new Date() } });
+  await db.conversationMember.update({
+    where: {
+      conversationId_userId: { conversationId: chat.id, userId: user.id },
+    },
+    data: { lastReadAt: new Date() },
+  });
   const kind = chatKind(chat);
   const [chats, others] = await Promise.all([
     chatList(user),
-    kind === "group" ? db.user.findMany({ where: { companyId: user.companyId, id: { notIn: chat.members.map((m) => m.userId) } }, orderBy: { name: "asc" } }) : [],
+    kind === "group"
+      ? db.user.findMany({
+          where: {
+            companyId: user.companyId,
+            id: { notIn: chat.members.map((m) => m.userId) },
+          },
+          orderBy: { name: "asc" },
+        })
+      : [],
   ]);
   const messages = [...chat.messages].reverse();
   const name = chatName(chat, user.id);
@@ -72,7 +97,9 @@ export default async function ChatPage({ params }: PageProps<"/messages/[id]">) 
               <div className="absolute right-0 z-10 mt-2 w-64 space-y-3 rounded-xl border border-line bg-surface p-3 shadow-lg">
                 <ul className="space-y-1 text-xs">
                   {chat.members.map((m) => (
-                    <li key={m.id}>{m.user.name} <span className="text-muted">· {ROLE_LABEL[m.user.role]}</span></li>
+                    <li key={m.id}>
+                      {m.user.name} <span className="text-muted">· {ROLE_LABEL[m.user.role]}</span>
+                    </li>
                   ))}
                 </ul>
                 {others.length > 0 && (
@@ -83,7 +110,9 @@ export default async function ChatPage({ params }: PageProps<"/messages/[id]">) 
                         <input type="checkbox" name="members" value={p.id} className="accent-[#ffc107]" /> {p.name}
                       </label>
                     ))}
-                    <Button variant="secondary" className="w-full py-1 text-xs">Add</Button>
+                    <Button variant="secondary" className="w-full py-1 text-xs">
+                      Add
+                    </Button>
                   </form>
                 )}
                 <form action={leaveGroup.bind(null, chat.id)}>

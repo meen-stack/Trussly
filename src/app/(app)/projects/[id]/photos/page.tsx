@@ -13,11 +13,21 @@ export default async function PhotosPage({ params }: PageProps<"/projects/[id]/p
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
   const photos = await db.photo.findMany({
-    where: { OR: [{ report: { projectId: project.id } }, { milestone: { projectId: project.id } }] },
-    include: { report: { select: { id: true, date: true } }, milestone: { select: { title: true } } },
+    where: {
+      OR: [{ report: { projectId: project.id } }, { milestone: { projectId: project.id } }],
+    },
+    include: {
+      report: { select: { id: true, date: true } },
+      milestone: { select: { title: true } },
+    },
     orderBy: { takenAt: "desc" },
   });
-  if (photos.length === 0) return <Card><EmptyState title="No photos yet" body="Photos from daily reports and milestone evidence collect here." /></Card>;
+  if (photos.length === 0)
+    return (
+      <Card>
+        <EmptyState title="No photos yet" />
+      </Card>
+    );
 
   const groups = new Map<string, typeof photos>();
   for (const p of photos) {
@@ -38,7 +48,9 @@ export default async function PhotosPage({ params }: PageProps<"/projects/[id]/p
                 </a>
                 <figcaption className="truncate px-2 py-1.5 text-xs text-muted">
                   {p.report ? (
-                    <Link href={`/projects/${project.id}/reports/${p.report.id}`} className="hover:text-brand-text">Daily report</Link>
+                    <Link href={`/projects/${project.id}/reports/${p.report.id}`} className="hover:text-brand-text">
+                      Daily report
+                    </Link>
                   ) : (
                     <>Milestone: {p.milestone?.title}</>
                   )}

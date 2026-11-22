@@ -57,7 +57,7 @@ export function ReportForm({
       <Field label="Work done today">
         <Textarea name="workDone" rows={4} placeholder="Poured level 2 slab, east side. Started blockwork on unit 3." required />
       </Field>
-      <Field label="Challenges or delays" hint="Anything the manager should know. Leave blank if none.">
+      <Field label="Challenges or delays">
         <Textarea name="issues" placeholder="Rebar delivery arrived short by 2 tonnes." />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -68,13 +68,13 @@ export function ReportForm({
           <Textarea name="equipment" rows={2} placeholder="Tower crane, concrete pump" />
         </Field>
       </div>
-      <Field label="Site incidents" hint="Injuries, near misses or damage. Leave blank if none.">
+      <Field label="Site incidents">
         <Textarea name="incidents" rows={2} placeholder="Near miss: unsecured plank on level 2 scaffold." />
       </Field>
       <Field label="Supervisor remarks">
         <Textarea name="remarks" rows={2} placeholder="Good productivity. On track for Friday's pour." />
       </Field>
-      <Field label="Site photos" hint="Up to 12 photos. Taken on your phone? They upload straight from the camera.">
+      <Field label="Site photos">
         <Input
           name="photos"
           type="file"

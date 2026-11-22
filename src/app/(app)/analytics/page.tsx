@@ -21,10 +21,25 @@ export default async function AnalyticsPage() {
   const projects = await db.project.findMany({
     where: visibleProjectsWhere(user),
     include: {
-      budgetLines: { include: { expenses: { include: { payments: true } }, changeOrders: true, purchases: { where: { status: { not: "CANCELLED" } }, include: { items: true, invoices: true } } } },
-      milestones: { include: { assignee: { select: { id: true, name: true } } } },
+      budgetLines: {
+        include: {
+          expenses: { include: { payments: true } },
+          changeOrders: true,
+          purchases: {
+            where: { status: { not: "CANCELLED" } },
+            include: { items: true, invoices: true },
+          },
+        },
+      },
+      milestones: {
+        include: { assignee: { select: { id: true, name: true } } },
+      },
       disputes: { select: { status: true } },
-      ratings: { include: { contractor: { select: { id: true, name: true, title: true } } } },
+      ratings: {
+        include: {
+          contractor: { select: { id: true, name: true, title: true } },
+        },
+      },
     },
     orderBy: { name: "asc" },
   });
@@ -41,12 +56,26 @@ export default async function AnalyticsPage() {
         revised: l.budgeted,
         committed: l.expenses.filter((e) => COMMITTED.includes(e.status)).reduce((s, e) => s + e.amount, 0),
         inReview: l.expenses.filter((e) => IN_REVIEW.includes(e.status)).reduce((s, e) => s + e.amount, 0),
-        openOrders: l.purchases.reduce((s, po) => s + openOrderValue(poTotal(po.items), po.invoices.filter((i) => i.status !== "REJECTED").reduce((t, i) => t + i.amount, 0)), 0),
+        openOrders: l.purchases.reduce(
+          (s, po) =>
+            s +
+            openOrderValue(
+              poTotal(po.items),
+              po.invoices.filter((i) => i.status !== "REJECTED").reduce((t, i) => t + i.amount, 0),
+            ),
+          0,
+        ),
       }),
     );
     const forecast = perLine.reduce((s, f) => s + f.forecast, 0);
     const known = perLine.reduce((s, f) => s + f.known, 0);
-    const f = { forecast, known, variance: budget - forecast, over: forecast > budget, overLines: perLine.filter((x) => x.over).length };
+    const f = {
+      forecast,
+      known,
+      variance: budget - forecast,
+      over: forecast > budget,
+      overLines: perLine.filter((x) => x.over).length,
+    };
     const value = p.milestones.reduce((s, m) => s + m.paymentAmount, 0);
     const verified = p.milestones.filter((m) => m.status === "VERIFIED").reduce((s, m) => s + m.paymentAmount, 0);
     const paid = expenses.flatMap((e) => e.payments).reduce((s, x) => s + x.amount, 0);
@@ -71,29 +100,59 @@ export default async function AnalyticsPage() {
     const approved = byMonth(allExpenses.filter((e) => COMMITTED.includes(e.status) && e.decidedAt).map((e) => ({ at: e.decidedAt!, amount: e.amount })));
     const paid = byMonth(allExpenses.flatMap((e) => e.payments).map((x) => ({ at: x.paidAt, amount: x.amount })));
     const months = [...new Set([...approved, ...paid].map((r) => r.month))].sort().slice(-9);
-    return months.map((month) => ({ month, approved: (approved.find((r) => r.month === month)?.amount ?? 0) / 100, paid: (paid.find((r) => r.month === month)?.amount ?? 0) / 100 }));
+    return months.map((month) => ({
+      month,
+      approved: (approved.find((r) => r.month === month)?.amount ?? 0) / 100,
+      paid: (paid.find((r) => r.month === month)?.amount ?? 0) / 100,
+    }));
   })();
   const cycle = paymentCycleDays(allExpenses.filter((e) => e.status === "PAID"));
 
   // Contractor scorecards: ratings plus on-time delivery of verified work.
-  const contractors = new Map<string, { name: string; title: string | null; ratings: { quality: number; timeliness: number; safety: number }[]; verified: number; onTime: number; projects: Set<string> }>();
+  const contractors = new Map<
+    string,
+    {
+      name: string;
+      title: string | null;
+      ratings: { quality: number; timeliness: number; safety: number }[];
+      verified: number;
+      onTime: number;
+      projects: Set<string>;
+    }
+  >();
   for (const p of projects) {
     for (const r of p.ratings) {
-      const c = contractors.get(r.contractor.id) ?? { name: r.contractor.name, title: r.contractor.title, ratings: [], verified: 0, onTime: 0, projects: new Set() };
+      const c = contractors.get(r.contractor.id) ?? {
+        name: r.contractor.name,
+        title: r.contractor.title,
+        ratings: [],
+        verified: 0,
+        onTime: 0,
+        projects: new Set(),
+      };
       c.ratings.push(r);
       c.projects.add(p.name);
       contractors.set(r.contractor.id, c);
     }
     for (const m of p.milestones) {
       if (!m.assignee || m.status !== "VERIFIED") continue;
-      const c = contractors.get(m.assignee.id) ?? { name: m.assignee.name, title: null, ratings: [], verified: 0, onTime: 0, projects: new Set() };
+      const c = contractors.get(m.assignee.id) ?? {
+        name: m.assignee.name,
+        title: null,
+        ratings: [],
+        verified: 0,
+        onTime: 0,
+        projects: new Set(),
+      };
       c.verified++;
       if (m.verifiedAt && m.verifiedAt <= m.dueDate) c.onTime++;
       c.projects.add(p.name);
       contractors.set(m.assignee.id, c);
     }
   }
-  const cards = [...contractors.entries()].map(([id, c]) => ({ id, ...c, sc: scorecard(c.ratings) })).sort((a, b) => (b.sc?.overall ?? 0) - (a.sc?.overall ?? 0));
+  const cards = [...contractors.entries()]
+    .map(([id, c]) => ({ id, ...c, sc: scorecard(c.ratings) }))
+    .sort((a, b) => (b.sc?.overall ?? 0) - (a.sc?.overall ?? 0));
 
   const totalBudget = rows.reduce((s, r) => s + r.budget, 0);
   const totalForecast = rows.reduce((s, r) => s + r.forecast, 0);
@@ -102,21 +161,49 @@ export default async function AnalyticsPage() {
     <>
       <PageHeader title="Analytics" subtitle={`${projects.length} project${projects.length === 1 ? "" : "s"} across ${user.company.name}.`} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Portfolio budget" value={formatMoney(totalBudget, currency, true)} sub={`${formatMoney(rows.reduce((s, r) => s + r.changeNet, 0), currency, true)} from change orders`} />
-        <Stat label="Forecast final cost" value={formatMoney(totalForecast, currency, true)} sub={totalForecast > totalBudget ? `${formatMoney(totalForecast - totalBudget, currency, true)} over budget` : "On budget"} tone={totalForecast > totalBudget ? "bad" : "ok"} />
-        <Stat label="Paid to date" value={formatMoney(rows.reduce((s, r) => s + r.paid, 0), currency, true)} />
+        <Stat
+          label="Portfolio budget"
+          value={formatMoney(totalBudget, currency, true)}
+          sub={`${formatMoney(
+            rows.reduce((s, r) => s + r.changeNet, 0),
+            currency,
+            true,
+          )} from change orders`}
+        />
+        <Stat
+          label="Forecast final cost"
+          value={formatMoney(totalForecast, currency, true)}
+          sub={totalForecast > totalBudget ? `${formatMoney(totalForecast - totalBudget, currency, true)} over budget` : "On budget"}
+          tone={totalForecast > totalBudget ? "bad" : "ok"}
+        />
+        <Stat
+          label="Paid to date"
+          value={formatMoney(
+            rows.reduce((s, r) => s + r.paid, 0),
+            currency,
+            true,
+          )}
+        />
         <Stat label="Approval to payment" value={cycle === null ? "–" : `${cycle.toFixed(1)} days`} sub="Average, fully paid invoices" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Spend by month" subtitle="Invoices approved against money paid out." />
+          <CardHeader title="Spend by month" />
           <div className="p-4">{monthly.length ? <MonthlyChart data={monthly} currency={currency} /> : <EmptyState title="No spend yet" />}</div>
         </Card>
         <Card>
-          <CardHeader title="Cost variance" subtitle="Forecast is each line's budget, or its known cost where that is higher." />
+          <CardHeader title="Cost variance" />
           <div className="p-4">
-            <VarianceChart data={rows.map((r) => ({ name: r.p.name, budget: r.budget / 100, forecast: r.forecast / 100, spent: r.known / 100 }))} currency={currency} />
+            <VarianceChart
+              data={rows.map((r) => ({
+                name: r.p.name,
+                budget: r.budget / 100,
+                forecast: r.forecast / 100,
+                spent: r.known / 100,
+              }))}
+              currency={currency}
+            />
           </div>
         </Card>
       </div>
@@ -140,7 +227,9 @@ export default async function AnalyticsPage() {
               {rows.map((r) => (
                 <tr key={r.p.id}>
                   <td className="px-5 py-3">
-                    <Link href={`/projects/${r.p.id}/budget`} className="font-medium hover:underline">{r.p.name}</Link>
+                    <Link href={`/projects/${r.p.id}/budget`} className="font-medium hover:underline">
+                      {r.p.name}
+                    </Link>
                   </td>
                   <td className="w-40 px-3 py-3">
                     <Progress value={r.progress * 100} tone="ok" />
@@ -152,12 +241,30 @@ export default async function AnalyticsPage() {
                     {r.variance === 0 ? "On budget" : `${formatMoney(-r.variance, currency)} over`}
                   </td>
                   <td className="px-3 py-3 text-right whitespace-nowrap">
-                    {r.changeCount} <span className="text-xs text-muted">({r.changeNet >= 0 ? "+" : ""}{formatMoney(r.changeNet, currency, true)})</span>
+                    {r.changeCount}{" "}
+                    <span className="text-xs text-muted">
+                      ({r.changeNet >= 0 ? "+" : ""}
+                      {formatMoney(r.changeNet, currency, true)})
+                    </span>
                   </td>
                   <td className="space-x-1 px-5 py-3 whitespace-nowrap">
-                    {r.overLines > 0 && <Badge tone="bad">{r.overLines} line{r.overLines === 1 ? "" : "s"} over</Badge>}
-                    {r.openDisputes > 0 && <Badge tone="warn">{r.openDisputes} dispute{r.openDisputes === 1 ? "" : "s"}</Badge>}
-                    {r.changePending > 0 && <Badge tone="brand">{r.changePending} change{r.changePending === 1 ? "" : "s"} pending</Badge>}
+                    {r.overLines > 0 && (
+                      <Badge tone="bad">
+                        {r.overLines} line{r.overLines === 1 ? "" : "s"} over
+                      </Badge>
+                    )}
+                    {r.openDisputes > 0 && (
+                      <Badge tone="warn">
+                        {r.openDisputes} dispute
+                        {r.openDisputes === 1 ? "" : "s"}
+                      </Badge>
+                    )}
+                    {r.changePending > 0 && (
+                      <Badge tone="brand">
+                        {r.changePending} change
+                        {r.changePending === 1 ? "" : "s"} pending
+                      </Badge>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -167,7 +274,7 @@ export default async function AnalyticsPage() {
       </Card>
 
       <Card className="mt-6">
-        <CardHeader title="Contractor scorecard" subtitle="Ratings on verified work (1 to 5) and how much work was verified by its deadline." />
+        <CardHeader title="Contractor scorecard" />
         {cards.length === 0 ? (
           <EmptyState title="No contractor history yet" />
         ) : (

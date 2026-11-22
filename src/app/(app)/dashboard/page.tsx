@@ -22,7 +22,11 @@ export const metadata: Metadata = { title: "Dashboard" };
 export default async function DashboardPage() {
   const user = await requireUser();
   const currency = user.company.currency;
-  const projects = await db.project.findMany({ where: visibleProjectsWhere(user), orderBy: { createdAt: "desc" }, select: { id: true } });
+  const projects = await db.project.findMany({
+    where: visibleProjectsWhere(user),
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
   const summaries = await Promise.all(projects.map((p) => loadProjectSummary(p.id)));
   const pending = await approvalCount(user);
   const activity = await db.auditEvent.findMany({
@@ -56,7 +60,11 @@ export default async function DashboardPage() {
         <Card>
           <EmptyState
             title="No projects yet"
-            body={can.createProject(user.role) ? "Create your first project to start tracking reports, milestones and spend." : "You'll see projects here once a manager adds you."}
+            body={
+              can.createProject(user.role)
+                ? "Create your first project to start tracking reports, milestones and spend."
+                : "You'll see projects here once a manager adds you."
+            }
             action={can.createProject(user.role) && <ButtonLink href="/projects/new">Create a project</ButtonLink>}
           />
         </Card>
@@ -65,12 +73,26 @@ export default async function DashboardPage() {
           {user.role === "SUPERVISOR" || user.role === "CONTRACTOR" || user.role === "FINANCE" ? (
             <RolePanel user={user} projectIds={projects.map((p) => p.id)} />
           ) : (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat label="Total budget" value={formatMoney(budget, currency, true)} sub={`${summaries.length} active sites`} />
-            <Stat label="Approved spend" value={formatMoney(spent, currency, true)} sub={`${budget ? Math.round((spent / budget) * 100) : 0}% of budget`} />
-            <Stat label="Waiting on you" value={pending} sub={<Link href="/approvals" className="text-brand-text hover:underline">Open approvals</Link>} tone={pending ? "warn" : undefined} />
-            <Stat label="Projects at risk" value={atRisk.length} sub={atRisk.length ? atRisk.map((s) => s.project.name).join(", ") : "All on track"} tone={atRisk.length ? "bad" : "ok"} />
-          </div>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <Stat label="Total budget" value={formatMoney(budget, currency, true)} sub={`${summaries.length} active sites`} />
+              <Stat label="Approved spend" value={formatMoney(spent, currency, true)} sub={`${budget ? Math.round((spent / budget) * 100) : 0}% of budget`} />
+              <Stat
+                label="Waiting on you"
+                value={pending}
+                sub={
+                  <Link href="/approvals" className="text-brand-text hover:underline">
+                    Open approvals
+                  </Link>
+                }
+                tone={pending ? "warn" : undefined}
+              />
+              <Stat
+                label="Projects at risk"
+                value={atRisk.length}
+                sub={atRisk.length ? atRisk.map((s) => s.project.name).join(", ") : "All on track"}
+                tone={atRisk.length ? "bad" : "ok"}
+              />
+            </div>
           )}
 
           {warnings.length > 0 && user.role !== "CONTRACTOR" && user.role !== "SUPERVISOR" && (
@@ -134,16 +156,38 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
   if (user.role === "SUPERVISOR") {
     const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
     const [toInspect, reportedToday, incidents, sites] = await Promise.all([
-      db.milestone.findMany({ where: { status: "SUBMITTED", projectId: { in: projectIds } }, include: { project: true, assignee: true }, orderBy: { submittedAt: "asc" } }),
-      db.dailyReport.findMany({ where: { projectId: { in: projectIds }, date: today }, select: { projectId: true } }),
-      db.dailyReport.count({ where: { projectId: { in: projectIds }, incidents: { not: null }, date: { gte: startOfWeek(today) } } }),
+      db.milestone.findMany({
+        where: { status: "SUBMITTED", projectId: { in: projectIds } },
+        include: { project: true, assignee: true },
+        orderBy: { submittedAt: "asc" },
+      }),
+      db.dailyReport.findMany({
+        where: { projectId: { in: projectIds }, date: today },
+        select: { projectId: true },
+      }),
+      db.dailyReport.count({
+        where: {
+          projectId: { in: projectIds },
+          incidents: { not: null },
+          date: { gte: startOfWeek(today) },
+        },
+      }),
       db.project.findMany({ where: project, select: { id: true, name: true } }),
     ]);
     const missing = sites.filter((p) => !reportedToday.some((r) => r.projectId === p.id));
     return (
       <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat label="Inspections waiting" value={toInspect.length} tone={toInspect.length ? "warn" : "ok"} sub={<Link href="/approvals" className="text-brand-text hover:underline">Open inspections</Link>} />
+          <Stat
+            label="Inspections waiting"
+            value={toInspect.length}
+            tone={toInspect.length ? "warn" : "ok"}
+            sub={
+              <Link href="/approvals" className="text-brand-text hover:underline">
+                Open inspections
+              </Link>
+            }
+          />
           <Stat label="Reports due today" value={missing.length} tone={missing.length ? "warn" : "ok"} sub={missing.length ? "Due by 6 PM" : "All filed"} />
           <Stat label="Incidents this week" value={incidents} tone={incidents ? "bad" : "ok"} />
           <Stat label="Your sites" value={sites.length} />
@@ -158,7 +202,10 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
                   <Link href={`/projects/${m.projectId}/milestones`} className="flex items-center gap-3 px-5 py-3 text-sm hover:bg-bg">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{m.title}</p>
-                      <p className="text-xs text-muted">{m.project.name} · {m.assignee?.name ?? "Contractor"}{m.submittedAt && ` · submitted ${format(m.submittedAt, "MMM d")}`}</p>
+                      <p className="text-xs text-muted">
+                        {m.project.name} · {m.assignee?.name ?? "Contractor"}
+                        {m.submittedAt && ` · submitted ${format(m.submittedAt, "MMM d")}`}
+                      </p>
                     </div>
                     <WorkBadge status={m.status} />
                   </Link>
@@ -174,7 +221,13 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
                 return (
                   <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                     <span className="font-medium">{p.name}</span>
-                    {done ? <span className="text-xs text-ok">Filed</span> : <ButtonLink href={`/projects/${p.id}/reports/new`} className="px-3 py-1.5 text-xs">File report</ButtonLink>}
+                    {done ? (
+                      <span className="text-xs text-ok">Filed</span>
+                    ) : (
+                      <ButtonLink href={`/projects/${p.id}/reports/new`} className="px-3 py-1.5 text-xs">
+                        File report
+                      </ButtonLink>
+                    )}
                   </li>
                 );
               })}
@@ -192,7 +245,11 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
         include: { project: true, invoices: { include: { payments: true } } },
         orderBy: { dueDate: "asc" },
       }),
-      db.expense.findMany({ where: { submitterId: user.id }, include: { payments: true, budgetLine: { include: { project: true } } }, orderBy: { createdAt: "desc" } }),
+      db.expense.findMany({
+        where: { submitterId: user.id },
+        include: { payments: true, budgetLine: { include: { project: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
     const active = work.filter((m) => m.status !== "VERIFIED" && m.status !== "REJECTED");
     const corrections = work.filter((m) => m.status === "CORRECTIONS");
@@ -202,14 +259,23 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
     return (
       <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat label="Your active work" value={active.length} sub={toInvoice.length ? `${toInvoice.length} verified, ready to invoice` : `${work.length} items in total`} />
-          <Stat label="Needs corrections" value={corrections.length} tone={corrections.length ? "bad" : "ok"} sub={corrections[0]?.title ?? "Nothing sent back"} />
+          <Stat
+            label="Your active work"
+            value={active.length}
+            sub={toInvoice.length ? `${toInvoice.length} verified, ready to invoice` : `${work.length} items in total`}
+          />
+          <Stat
+            label="Needs corrections"
+            value={corrections.length}
+            tone={corrections.length ? "bad" : "ok"}
+            sub={corrections[0]?.title ?? "Nothing sent back"}
+          />
           <Stat label="Owed to you" value={money(owed)} sub="Approved, not yet paid" />
           <Stat label="Paid to date" value={money(paid)} tone="ok" />
         </div>
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Card>
-            <CardHeader title="Your work" subtitle="Work and payment are tracked separately." />
+            <CardHeader title="Your work" />
             <ul className="divide-y divide-line">
               {work.length === 0 && <li className="p-5 text-sm text-muted">No work assigned yet.</li>}
               {work.map((m) => (
@@ -218,7 +284,9 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-medium">{m.title}</p>
-                        <p className="text-xs text-muted">{m.project.name} · {formatMoney(m.paymentAmount, currency)} · due {format(m.dueDate, "MMM d")}</p>
+                        <p className="text-xs text-muted">
+                          {m.project.name} · {formatMoney(m.paymentAmount, currency)} · due {format(m.dueDate, "MMM d")}
+                        </p>
                       </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -237,7 +305,9 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
               {invoices.map((e) => (
                 <li key={e.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                   <div className="min-w-0">
-                    <p className="font-medium">{formatMoney(e.amount, currency)} · {e.budgetLine.project.name}</p>
+                    <p className="font-medium">
+                      {formatMoney(e.amount, currency)} · {e.budgetLine.project.name}
+                    </p>
                     <p className="truncate text-xs text-muted">
                       {e.description}
                       {paidOf(e) > 0 && ` · paid ${formatMoney(paidOf(e), currency)}`}
@@ -263,25 +333,51 @@ async function RolePanel({ user, projectIds }: { user: CurrentUser; projectIds: 
   const owing = invoices.filter((e) => e.status === "APPROVED" || e.status === "PROCESSING");
   const overdue = owing.filter((e) => paymentKey(e, now) === "OVERDUE");
   const dueSoon = owing.filter((e) => e.dueDate && e.dueDate >= now && e.dueDate.getTime() - now.getTime() < 7 * DAY);
-  const paidMonth = invoices.flatMap((e) => e.payments).filter((p) => p.paidAt >= startOfMonth(now)).reduce((s, p) => s + p.amount, 0);
+  const paidMonth = invoices
+    .flatMap((e) => e.payments)
+    .filter((p) => p.paidAt >= startOfMonth(now))
+    .reduce((s, p) => s + p.amount, 0);
   return (
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Approved, unpaid" value={money(owing.reduce((s, e) => s + balanceOf(e), 0))} sub={<Link href="/finance" className="text-brand-text hover:underline">{owing.length} to pay</Link>} />
-        <Stat label="Overdue" value={overdue.length} tone={overdue.length ? "bad" : "ok"} sub={overdue.length ? money(overdue.reduce((s, e) => s + balanceOf(e), 0)) : "Nothing overdue"} />
-        <Stat label="Due in 7 days" value={dueSoon.length} tone={dueSoon.length ? "warn" : undefined} sub={money(dueSoon.reduce((s, e) => s + balanceOf(e), 0))} />
+        <Stat
+          label="Approved, unpaid"
+          value={money(owing.reduce((s, e) => s + balanceOf(e), 0))}
+          sub={
+            <Link href="/finance" className="text-brand-text hover:underline">
+              {owing.length} to pay
+            </Link>
+          }
+        />
+        <Stat
+          label="Overdue"
+          value={overdue.length}
+          tone={overdue.length ? "bad" : "ok"}
+          sub={overdue.length ? money(overdue.reduce((s, e) => s + balanceOf(e), 0)) : "Nothing overdue"}
+        />
+        <Stat
+          label="Due in 7 days"
+          value={dueSoon.length}
+          tone={dueSoon.length ? "warn" : undefined}
+          sub={money(dueSoon.reduce((s, e) => s + balanceOf(e), 0))}
+        />
         <Stat label="Paid this month" value={money(paidMonth)} tone="ok" />
       </div>
       <Card className="mt-6">
-        <CardHeader title="Payments to make" subtitle="Most urgent first." />
+        <CardHeader title="Payments to make" />
         <ul className="divide-y divide-line">
           {owing.length === 0 && <li className="p-5 text-sm text-muted">Nothing waiting for payment.</li>}
           {owing.slice(0, 6).map((e) => (
             <li key={e.id}>
               <Link href="/finance" className="flex items-center justify-between gap-3 px-5 py-3 text-sm hover:bg-bg">
                 <div className="min-w-0">
-                  <p className="font-medium">{formatMoney(balanceOf(e), currency)} · {e.vendor}</p>
-                  <p className="truncate text-xs text-muted">{e.budgetLine.project.name}{e.dueDate && ` · due ${format(e.dueDate, "MMM d")}`}</p>
+                  <p className="font-medium">
+                    {formatMoney(balanceOf(e), currency)} · {e.vendor}
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    {e.budgetLine.project.name}
+                    {e.dueDate && ` · due ${format(e.dueDate, "MMM d")}`}
+                  </p>
                 </div>
                 <PaymentBadge invoice={e} />
               </Link>

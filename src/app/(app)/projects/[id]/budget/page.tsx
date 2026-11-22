@@ -23,7 +23,14 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const threshold = user.company.approvalThreshold;
   const lines = await db.budgetLine.findMany({
     where: { projectId: project.id },
-    include: { expenses: true, changeOrders: true, purchases: { where: { status: { not: "CANCELLED" } }, include: { items: true, invoices: true } } },
+    include: {
+      expenses: true,
+      changeOrders: true,
+      purchases: {
+        where: { status: { not: "CANCELLED" } },
+        include: { items: true, invoices: true },
+      },
+    },
     orderBy: { category: "asc" },
   });
   const expenses = await db.expense.findMany({
@@ -32,7 +39,13 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
     orderBy: { createdAt: "desc" },
   });
   const work = await db.milestone.findMany({
-    where: { projectId: project.id, status: { not: "REJECTED" }, ...(user.role === "CONTRACTOR" && { OR: [{ assigneeId: user.id }, { assigneeId: null }] }) },
+    where: {
+      projectId: project.id,
+      status: { not: "REJECTED" },
+      ...(user.role === "CONTRACTOR" && {
+        OR: [{ assigneeId: user.id }, { assigneeId: null }],
+      }),
+    },
     orderBy: { sortOrder: "asc" },
   });
   const paid = expenses.reduce((s, e) => s + paidOf(e), 0);
@@ -42,8 +55,28 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const forecasts = new Map(
     lines.map((l) => {
       const sum = b.lines.find((x) => x.id === l.id)!;
-      const openOrders = l.purchases.reduce((s, po) => s + openOrderValue(poTotal(po.items), po.invoices.filter((i) => i.status !== "REJECTED").reduce((t, i) => t + i.amount, 0)), 0);
-      return [l.id, { ...forecastLine({ revised: l.budgeted, committed: sum.spent, inReview: sum.pending, openOrders }), openOrders, original: originalBudget(l.budgeted, l.changeOrders) }];
+      const openOrders = l.purchases.reduce(
+        (s, po) =>
+          s +
+          openOrderValue(
+            poTotal(po.items),
+            po.invoices.filter((i) => i.status !== "REJECTED").reduce((t, i) => t + i.amount, 0),
+          ),
+        0,
+      );
+      return [
+        l.id,
+        {
+          ...forecastLine({
+            revised: l.budgeted,
+            committed: sum.spent,
+            inReview: sum.pending,
+            openOrders,
+          }),
+          openOrders,
+          original: originalBudget(l.budgeted, l.changeOrders),
+        },
+      ];
     }),
   );
   const forecastTotal = [...forecasts.values()].reduce((s, f) => s + f.forecast, 0);
@@ -56,13 +89,22 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Revised budget" value={formatMoney(b.budgeted, currency)} sub={b.budgeted !== originalTotal ? `${formatMoney(originalTotal, currency)} original` : "No approved changes"} />
-        <Stat label="Approved spend" value={formatMoney(b.spent, currency)} sub={`${Math.round(b.ratio * 100)}% used`} tone={b.ratio > 1 ? "bad" : b.ratio >= 0.9 ? "warn" : undefined} />
+        <Stat
+          label="Revised budget"
+          value={formatMoney(b.budgeted, currency)}
+          sub={b.budgeted !== originalTotal ? `${formatMoney(originalTotal, currency)} original` : "No approved changes"}
+        />
+        <Stat
+          label="Approved spend"
+          value={formatMoney(b.spent, currency)}
+          sub={`${Math.round(b.ratio * 100)}% used`}
+          tone={b.ratio > 1 ? "bad" : b.ratio >= 0.9 ? "warn" : undefined}
+        />
         <Stat label="Paid" value={formatMoney(paid, currency)} sub={`${formatMoney(owed, currency)} approved, not yet paid`} />
         <Stat
           label="Forecast final cost"
           value={formatMoney(forecastTotal, currency)}
-          sub={forecastTotal > b.budgeted ? `${formatMoney(forecastTotal - b.budgeted, currency)} over budget` : "On budget, no lines forecast over"}
+          sub={forecastTotal > b.budgeted ? `${formatMoney(forecastTotal - b.budgeted, currency)} over budget` : "On budget"}
           tone={forecastTotal > b.budgeted ? "bad" : "ok"}
         />
       </div>
@@ -72,13 +114,18 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
           <div>
             <p className="font-display font-semibold">Retention</p>
             <p className="text-sm text-muted">
-              {heldTotal > 0 ? `${formatMoney(heldTotal, currency)} held on ${held.length} invoice${held.length === 1 ? "" : "s"} until handover.` : "All retention has been released."}
+              {heldTotal > 0
+                ? `${formatMoney(heldTotal, currency)} held on ${held.length} invoice${held.length === 1 ? "" : "s"} until handover.`
+                : "All retention has been released."}
               {released > 0 && ` ${formatMoney(released, currency)} released at handover.`}
-              {heldTotal > 0 && project.status !== "COMPLETED" && " It can be released once the project is marked completed."}
             </p>
           </div>
           {heldTotal > 0 && canReleaseRetention(user.role, project.status) && (
-            <ActionForm action={releaseRetention.bind(null, project.id)} submitLabel={`Release ${formatMoney(heldTotal, currency)}`} className="flex flex-col gap-2 sm:items-end">
+            <ActionForm
+              action={releaseRetention.bind(null, project.id)}
+              submitLabel={`Release ${formatMoney(heldTotal, currency)}`}
+              className="flex flex-col gap-2 sm:items-end"
+            >
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="confirm" className="accent-[#ffc107]" /> The project is handed over
               </label>
@@ -89,7 +136,7 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Budget lines" subtitle="Lines turn amber at 90% and red over 100%. Forecast is the budget, or the known cost (approved + in review + on order) where that is higher." />
+          <CardHeader title="Budget lines" />
           <div className="divide-y divide-line">
             {b.lines.map((l) => (
               <div key={l.id} className="px-5 py-4">
@@ -112,7 +159,12 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
                       {l.pending > 0 && <span>{formatMoney(l.pending, currency)} in review</span>}
                       {f.openOrders > 0 && <span>{formatMoney(f.openOrders, currency)} on order</span>}
                       {f.original !== l.budgeted && <span>{formatMoney(l.budgeted - f.original, currency)} from change orders</span>}
-                      <span className={f.over ? "font-medium text-bad" : ""}>Known cost {formatMoney(f.known, currency)}{f.over ? `, forecast ${formatMoney(-f.variance, currency)} over` : ""}</span>
+                      {f.known !== l.spent && (
+                        <span className={f.over ? "font-medium text-bad" : ""}>
+                          Known cost {formatMoney(f.known, currency)}
+                          {f.over ? `, forecast ${formatMoney(-f.variance, currency)} over` : ""}
+                        </span>
+                      )}
                     </p>
                   );
                 })()}
@@ -141,51 +193,58 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
 
         {can.submitExpense(user.role) && (
           <Card className="self-start">
-            <CardHeader title="Submit an invoice" subtitle={`Over ${formatMoney(threshold, currency)} also needs the owner's approval. ${user.company.retentionPercent}% is held on work invoices until handover.`} />
-            <div className="p-5">
-              <ActionForm action={submitExpense.bind(null, project.id)} submitLabel="Submit invoice">
-                <Field label="Budget line">
-                  <Select name="budgetLineId" required defaultValue="">
-                    <option value="" disabled>
-                      Choose…
-                    </option>
-                    {lines.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.category}
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 font-display font-semibold [&::-webkit-details-marker]:hidden">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-lg leading-none text-brand-ink transition-transform group-open:rotate-45">
+                  +
+                </span>
+                Submit an invoice
+              </summary>
+              <div className="border-t border-line p-5">
+                <ActionForm action={submitExpense.bind(null, project.id)} submitLabel="Submit invoice">
+                  <Field label="Budget line">
+                    <Select name="budgetLineId" required defaultValue="">
+                      <option value="" disabled>
+                        Choose…
                       </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="For work" hint="Invoices for work can be approved once the work is verified.">
-                  <Select name="milestoneId" defaultValue="">
-                    <option value="">Not tied to work (materials, plant hire…)</option>
-                    {work.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.title}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Vendor">
-                  <Input name="vendor" placeholder="Apex Concrete Ltd" required />
-                </Field>
-                <Field label="What it covers">
-                  <Input name="description" placeholder="Level 2 slab pour" required />
-                </Field>
-                <Field label={`Amount (${currency})`}>
-                  <Input name="amount" inputMode="decimal" placeholder="18500" required />
-                </Field>
-                <Field label="Invoice" hint="PDF or photo, optional.">
-                  <Input name="invoice" type="file" accept="image/*,application/pdf" />
-                </Field>
-              </ActionForm>
-            </div>
+                      {lines.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.category}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="For work">
+                    <Select name="milestoneId" defaultValue="">
+                      <option value="">Not tied to work (materials, plant hire…)</option>
+                      {work.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.title}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Vendor">
+                    <Input name="vendor" placeholder="Apex Concrete Ltd" required />
+                  </Field>
+                  <Field label="What it covers">
+                    <Input name="description" placeholder="Level 2 slab pour" required />
+                  </Field>
+                  <Field label={`Amount (${currency})`}>
+                    <Input name="amount" inputMode="decimal" placeholder="18500" required />
+                  </Field>
+                  <Field label="Invoice">
+                    <Input name="invoice" type="file" accept="image/*,application/pdf" />
+                  </Field>
+                </ActionForm>
+              </div>
+            </details>
           </Card>
         )}
       </div>
 
       <Card>
-        <CardHeader title="Invoices and payments" subtitle="Approval and payment are tracked separately from the work itself." />
+        <CardHeader title="Invoices and payments" />
         <InvoiceTable rows={expenses} role={user.role} currency={currency} threshold={threshold} />
       </Card>
     </div>

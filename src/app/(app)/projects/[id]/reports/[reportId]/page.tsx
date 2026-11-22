@@ -16,7 +16,10 @@ export default async function ReportPage({ params }: PageProps<"/projects/[id]/r
   const { id, reportId } = await params;
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
-  const report = await db.dailyReport.findFirst({ where: { id: reportId, projectId: project.id }, include: { author: true, photos: true } });
+  const report = await db.dailyReport.findFirst({
+    where: { id: reportId, projectId: project.id },
+    include: { author: true, photos: true },
+  });
   if (!report) notFound();
   const canReview = can.reviewReport(user.role) && report.status === "SUBMITTED";
 
@@ -27,10 +30,16 @@ export default async function ReportPage({ params }: PageProps<"/projects/[id]/r
           <h2 className="font-display text-xl font-semibold">{format(report.date, "EEEE, MMMM d, yyyy")}</h2>
           <StatusBadge status={report.status} />
         </div>
-        <p className="mt-1 text-sm text-muted">Filed by {report.author.name} at {format(report.createdAt, "h:mm a")}</p>
+        <p className="mt-1 text-sm text-muted">
+          Filed by {report.author.name} at {format(report.createdAt, "h:mm a")}
+        </p>
         <div className="mt-5 flex flex-wrap gap-4 text-sm">
-          <span className="flex items-center gap-1.5"><CloudSun className="h-4 w-4 text-muted" /> {report.weather}</span>
-          <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-muted" /> {report.crewCount} workers on site</span>
+          <span className="flex items-center gap-1.5">
+            <CloudSun className="h-4 w-4 text-muted" /> {report.weather}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Users className="h-4 w-4 text-muted" /> {report.crewCount} workers on site
+          </span>
           <span className="font-medium">{report.progress}% complete overall</span>
         </div>
         <h3 className="mt-6 text-sm font-semibold">Work done</h3>
@@ -94,8 +103,12 @@ export default async function ReportPage({ params }: PageProps<"/projects/[id]/r
           <form action={reviewReport.bind(null, project.id, report.id)} className="mt-4 space-y-3">
             <Textarea name="note" placeholder="Optional note to the supervisor" />
             <div className="flex gap-2">
-              <Button name="decision" value="accept" variant="success" className="flex-1">Accept</Button>
-              <Button name="decision" value="return" variant="danger" className="flex-1">Send back</Button>
+              <Button name="decision" value="accept" variant="success" className="flex-1">
+                Accept
+              </Button>
+              <Button name="decision" value="return" variant="danger" className="flex-1">
+                Send back
+              </Button>
             </div>
           </form>
         </Card>

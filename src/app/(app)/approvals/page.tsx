@@ -23,9 +23,27 @@ export default async function ApprovalsPage() {
   const currency = user.company.currency;
   const w = approvalWhere(user);
   const [reports, milestones, expenses, other] = await Promise.all([
-    w.reports ? db.dailyReport.findMany({ where: w.reports, include: { project: true, author: true }, orderBy: { date: "desc" } }) : [],
-    w.milestones ? db.milestone.findMany({ where: w.milestones, include: { project: true, assignee: { select: { name: true } } }, orderBy: { dueDate: "asc" } }) : [],
-    w.expenses ? db.expense.findMany({ where: w.expenses, include: invoiceInclude, orderBy: { createdAt: "asc" } }) : [],
+    w.reports
+      ? db.dailyReport.findMany({
+          where: w.reports,
+          include: { project: true, author: true },
+          orderBy: { date: "desc" },
+        })
+      : [],
+    w.milestones
+      ? db.milestone.findMany({
+          where: w.milestones,
+          include: { project: true, assignee: { select: { name: true } } },
+          orderBy: { dueDate: "asc" },
+        })
+      : [],
+    w.expenses
+      ? db.expense.findMany({
+          where: w.expenses,
+          include: invoiceInclude,
+          orderBy: { createdAt: "asc" },
+        })
+      : [],
     otherQueue(user),
   ]);
   const total = reports.length + milestones.length + expenses.length + other.length;
@@ -33,10 +51,10 @@ export default async function ApprovalsPage() {
 
   return (
     <>
-      <PageHeader title="Approvals" subtitle={hasQueue ? `${total} item${total === 1 ? "" : "s"} waiting on you` : "Nothing here needs your role. Items you submit show their status on each project."} />
+      <PageHeader title="Approvals" subtitle={hasQueue ? `${total} item${total === 1 ? "" : "s"} waiting on you` : "Nothing for you"} />
       {hasQueue && total === 0 && (
         <Card>
-          <EmptyState title="You're all caught up" body="New reports, work and invoices that need you will appear here." />
+          <EmptyState title="You're all caught up" />
         </Card>
       )}
       <div className="space-y-6">

@@ -9,7 +9,10 @@ export const metadata: Metadata = { title: "Join your team" };
 
 export default async function InvitePage({ params }: PageProps<"/invite/[token]">) {
   const { token } = await params;
-  const invite = await db.invite.findUnique({ where: { token }, include: { company: true } });
+  const invite = await db.invite.findUnique({
+    where: { token },
+    include: { company: true },
+  });
   if (!invite || invite.usedAt || invite.expiresAt < new Date()) {
     return (
       <div>

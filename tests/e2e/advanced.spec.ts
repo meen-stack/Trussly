@@ -6,6 +6,7 @@ const PROJECT = "Harbour View Residences";
 test("change order: manager proposes, approves with a signature, budget moves", async ({ page }) => {
   await loginAs(page, "MANAGER");
   await openProject(page, PROJECT, "Change orders");
+  await page.locator("summary", { hasText: "Propose a change" }).click();
   await page.locator('input[name="title"]').fill("E2E: extra site lighting");
   await page.locator('textarea[name="reason"]').fill("Night work needs more lighting on the north side.");
   await page.locator('input[name="amount"]').fill("2500");
@@ -34,6 +35,7 @@ test("materials: supervisor receives a delivery and logs use", async ({ page }) 
   await po.getByRole("button", { name: "Log delivery" }).click();
   await expect(po.getByText("Delivery logged.")).toBeVisible();
 
+  await page.locator("summary", { hasText: "Log material use" }).click();
   await page.locator('select[name="materialId"]').selectOption({ label: "Electrical cable 2.5 mm² (500 m)" });
   await page.locator('input[name="quantity"]').fill("120");
   await page.getByRole("button", { name: "Log", exact: true }).click();
@@ -97,6 +99,7 @@ test("messages: direct chat, unread badge and a new group", async ({ page }) => 
   await expect(page.getByText("E2E: deck walk at 8?", { exact: true })).toBeVisible();
 
   await page.goto("/messages");
+  await page.locator("summary", { hasText: "New group chat" }).click();
   await page.locator('input[name="title"]').fill("E2E crew");
   await page.getByLabel(/Sam Okafor/).check();
   await page.getByRole("button", { name: "Create group" }).click();
@@ -116,4 +119,21 @@ test("analytics: owner sees the portfolio, contractor doesn't", async ({ page })
   await expect(page.getByText("Jonah Price")).toBeVisible();
   await loginAs(page, "CONTRACTOR");
   await expect(page.getByRole("link", { name: "Analytics" })).toHaveCount(0);
+});
+
+test("tutorial: shows once with Skip, reopens from the menu", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('form:has(input[value="OWNER"]) button').click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  const tour = page.getByRole("dialog", { name: "Tutorial" });
+  await expect(tour.getByText("Hi Olivia, welcome")).toBeVisible();
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour.getByText("All sites at a glance")).toBeVisible();
+  await tour.getByRole("button", { name: "Skip" }).click();
+  await expect(tour).toHaveCount(0);
+  await page.reload();
+  await page.waitForTimeout(800);
+  await expect(tour).toHaveCount(0);
+  await page.getByRole("button", { name: "Tutorial" }).first().click();
+  await expect(tour.getByText("Hi Olivia, welcome")).toBeVisible();
 });

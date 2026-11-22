@@ -5,9 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   AlertTriangle, BarChart3, Bell, Camera, CheckSquare, ClipboardList, FileSignature, FolderKanban, GitPullRequestArrow,
-  HardHat, History, LayoutDashboard, LogOut, Menu, MessageCircle, Package, Settings, Users, Wallet, X,
+  GraduationCap, HardHat, History, LayoutDashboard, LogOut, Menu, MessageCircle, Package, Settings, Users, Wallet, X,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { TourButton } from "./tour";
 import { cn } from "./ui";
 
 type Counts = { approvals: number; unread: number; messages: number };
@@ -100,7 +101,12 @@ export function MobileMenu({ counts, finance, analytics, projectName }: { counts
               </>
             )}
           </div>
-          <form action={logout} className="border-t border-white/10 p-3">
+          <div className="border-t border-white/10 p-3 pb-0">
+            <TourButton onClick={close} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70">
+              <GraduationCap className="h-5 w-5" /> Tutorial
+            </TourButton>
+          </div>
+          <form action={logout} className="p-3 pt-0">
             <button tabIndex={open ? 0 : -1} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/70">
               <LogOut className="h-5 w-5" /> Log out
             </button>

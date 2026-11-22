@@ -13,12 +13,26 @@ export const metadata: Metadata = { title: "Audit trail" };
 export default async function ActivityPage({ params, searchParams }: PageProps<"/projects/[id]/activity">) {
   const { id } = await params;
   const raw = (await searchParams) as Record<string, string | undefined>;
-  const f: AuditFilter = { type: raw.type || undefined, who: raw.who || undefined, q: raw.q || undefined, from: raw.from || undefined, to: raw.to || undefined };
+  const f: AuditFilter = {
+    type: raw.type || undefined,
+    who: raw.who || undefined,
+    q: raw.q || undefined,
+    from: raw.from || undefined,
+    to: raw.to || undefined,
+  };
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
   const [events, people, count] = await Promise.all([
-    db.auditEvent.findMany({ where: auditWhere(project.id, f), include: { actor: true }, orderBy: { createdAt: "desc" }, take: 300 }),
-    db.user.findMany({ where: { auditEvents: { some: { projectId: project.id } } }, orderBy: { name: "asc" } }),
+    db.auditEvent.findMany({
+      where: auditWhere(project.id, f),
+      include: { actor: true },
+      orderBy: { createdAt: "desc" },
+      take: 300,
+    }),
+    db.user.findMany({
+      where: { auditEvents: { some: { projectId: project.id } } },
+      orderBy: { name: "asc" },
+    }),
     db.auditEvent.count({ where: auditWhere(project.id, f) }),
   ]);
   const qs = new URLSearchParams(Object.entries(f).filter((e): e is [string, string] => !!e[1])).toString();
@@ -28,7 +42,6 @@ export default async function ActivityPage({ params, searchParams }: PageProps<"
     <Card>
       <CardHeader
         title="Audit trail"
-        subtitle="Every approval, rejection, signature, payment and change, with who did it and when. Entries can't be edited."
         action={
           <ButtonLink href={`/projects/${project.id}/activity/export${qs ? `?${qs}` : ""}`} variant="secondary" prefetch={false}>
             <Download className="h-4 w-4" /> CSV
@@ -39,11 +52,19 @@ export default async function ActivityPage({ params, searchParams }: PageProps<"
         <Input name="q" defaultValue={f.q} placeholder="Search actions" className="lg:col-span-2" aria-label="Search" />
         <Select name="type" defaultValue={f.type ?? ""} aria-label="Type">
           <option value="">All types</option>
-          {Object.entries(AUDIT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          {Object.entries(AUDIT_TYPES).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
         </Select>
         <Select name="who" defaultValue={f.who ?? ""} aria-label="Person">
           <option value="">Everyone</option>
-          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {people.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
         </Select>
         <Input name="from" type="date" defaultValue={f.from} aria-label="From" />
         <div className="flex gap-2">
@@ -53,7 +74,10 @@ export default async function ActivityPage({ params, searchParams }: PageProps<"
       </form>
       {filtered && (
         <p className="border-b border-line px-5 py-2 text-xs text-muted">
-          {count} matching entr{count === 1 ? "y" : "ies"} · <a href="?" className="text-brand-text hover:underline">Clear filters</a>
+          {count} matching entr{count === 1 ? "y" : "ies"} ·{" "}
+          <a href="?" className="text-brand-text hover:underline">
+            Clear filters
+          </a>
         </p>
       )}
       {events.length === 0 ? (

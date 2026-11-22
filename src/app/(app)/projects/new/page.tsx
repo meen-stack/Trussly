@@ -14,7 +14,7 @@ export default async function NewProjectPage() {
   const today = new Date().toISOString().slice(0, 10);
   return (
     <>
-      <PageHeader title="New project" subtitle="We'll split the budget into standard lines you can adjust later." />
+      <PageHeader title="New project" />
       <Card className="max-w-2xl p-6">
         <ActionForm action={createProject} submitLabel="Create project" pendingLabel="Creating…">
           <Field label="Project name">
@@ -37,7 +37,7 @@ export default async function NewProjectPage() {
               <Input name="budget" inputMode="decimal" placeholder="450000" required />
             </Field>
           </div>
-          <Field label="Cover photo" hint="Optional. JPG or PNG up to 8 MB.">
+          <Field label="Cover photo">
             <Input name="cover" type="file" accept="image/*" />
           </Field>
         </ActionForm>

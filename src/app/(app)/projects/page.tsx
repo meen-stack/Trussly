@@ -12,13 +12,16 @@ export const metadata: Metadata = { title: "Projects" };
 
 export default async function ProjectsPage() {
   const user = await requireUser();
-  const projects = await db.project.findMany({ where: visibleProjectsWhere(user), orderBy: { createdAt: "desc" }, select: { id: true } });
+  const projects = await db.project.findMany({
+    where: visibleProjectsWhere(user),
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
   const summaries = await Promise.all(projects.map((p) => loadProjectSummary(p.id)));
   return (
     <>
       <PageHeader
         title="Projects"
-        subtitle="Every site you can see, with progress and spend at a glance."
         action={
           can.createProject(user.role) && (
             <ButtonLink href="/projects/new">
@@ -29,7 +32,7 @@ export default async function ProjectsPage() {
       />
       {summaries.length === 0 ? (
         <Card>
-          <EmptyState title="No projects yet" body="Projects you create or are added to show up here." />
+          <EmptyState title="No projects yet" />
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -63,6 +63,7 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 - **Notifications:** in-app and by email (through Resend) for work submitted, inspection requests, approvals, corrections, new invoices, invoice approvals, payments, budget alerts, deadlines coming up and overdue work and invoices.
 - **Photo timeline and audit trail:** every photo by day, and every approval, rejection, signature, payment and budget change with who did it and when. The audit trail filters by type, person, date and text, and exports to CSV.
 - **Accounts:** sign-up creates a company, owners invite people by role, and users can reset their password by email.
+- **Simple screens and a tutorial:** short labels, forms tucked behind a + until needed, and a ☰ menu on phones. A short first-run tutorial for each role can be skipped and reopened from the menu.
 
 | | |
 | --- | --- |
@@ -75,6 +76,8 @@ Payment:  No invoice → Invoice submitted → (Under review) → Awaiting payme
 | ![Product tour](docs/screenshots/about.png) | ![Photo timeline](docs/screenshots/photos.png) |
 
 <p align="center"><img src="docs/screenshots/mobile-report.png" alt="Filing a daily report on a phone" width="300"> <img src="docs/screenshots/mobile-chat.png" alt="A direct chat on a phone" width="300"> <img src="docs/screenshots/mobile-menu-project.png" alt="The phone menu, with every section of the current project" width="300"></p>
+
+<p align="center"><img src="docs/screenshots/mobile-tutorial.png" alt="The first-run tutorial, with Skip" width="300"></p>
 
 ## Roles and permissions
 

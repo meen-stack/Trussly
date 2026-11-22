@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Bell, CheckSquare, FolderKanban, LayoutDashboard, MessageCircle, Settings, Users, Wallet } from "lucide-react";
+import { BarChart3, Bell, GraduationCap, CheckSquare, FolderKanban, LayoutDashboard, MessageCircle, Settings, Users, Wallet } from "lucide-react";
 import { cn } from "./ui";
+import { TourButton } from "./tour";
 
 const ITEMS = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -49,6 +50,12 @@ export function AppNav({
           </Link>
         );
       })}
+      {!mobile && (
+        <TourButton className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-white/65 transition-colors hover:bg-white/5 hover:text-white">
+          <GraduationCap className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">Tutorial</span>
+        </TourButton>
+      )}
     </nav>
   );
 }

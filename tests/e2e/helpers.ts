@@ -2,6 +2,8 @@ import { expect, type Page } from "@playwright/test";
 
 export async function loginAs(page: Page, role: "OWNER" | "MANAGER" | "SUPERVISOR" | "CONTRACTOR" | "FINANCE") {
   await page.context().clearCookies();
+  // The first-run tutorial would cover the page; tests that need it turn it back on.
+  await page.addInitScript(() => localStorage.setItem("trussly-tour-off", "1"));
   await page.goto("/login");
   await page.locator(`form:has(input[value="${role}"]) button`).click();
   await expect(page).toHaveURL(/\/dashboard/);

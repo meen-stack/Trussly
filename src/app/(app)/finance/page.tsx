@@ -20,8 +20,16 @@ export default async function FinancePage() {
   const { currency, approvalThreshold: threshold } = user.company;
   const project = visibleProjectsWhere(user);
   const [invoices, projects] = await Promise.all([
-    db.expense.findMany({ where: { budgetLine: { project } }, include: invoiceInclude, orderBy: { dueDate: "asc" } }),
-    db.project.findMany({ where: project, include: { budgetLines: { select: { budgeted: true } } }, orderBy: { name: "asc" } }),
+    db.expense.findMany({
+      where: { budgetLine: { project } },
+      include: invoiceInclude,
+      orderBy: { dueDate: "asc" },
+    }),
+    db.project.findMany({
+      where: project,
+      include: { budgetLines: { select: { budgeted: true } } },
+      orderBy: { name: "asc" },
+    }),
   ]);
   const today = new Date();
   const owing = invoices.filter((e) => e.status === "APPROVED" || e.status === "PROCESSING");
@@ -49,16 +57,29 @@ export default async function FinancePage() {
 
   return (
     <>
-      <PageHeader title="Finance" subtitle="Invoices, payments and what's owed across every project." />
+      <PageHeader title="Finance" />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Approved, unpaid" value={formatMoney(outstanding, currency, true)} sub={`${owing.length} invoice${owing.length === 1 ? "" : "s"} to pay`} />
-        <Stat label="Overdue" value={overdue.length} sub={overdue.length ? money(overdue.reduce((s, e) => s + balanceOf(e), 0)) : "Nothing overdue"} tone={overdue.length ? "bad" : "ok"} />
+        <Stat
+          label="Approved, unpaid"
+          value={formatMoney(outstanding, currency, true)}
+          sub={`${owing.length} invoice${owing.length === 1 ? "" : "s"} to pay`}
+        />
+        <Stat
+          label="Overdue"
+          value={overdue.length}
+          sub={overdue.length ? money(overdue.reduce((s, e) => s + balanceOf(e), 0)) : "Nothing overdue"}
+          tone={overdue.length ? "bad" : "ok"}
+        />
         <Stat label="Paid this month" value={formatMoney(paidThisMonth, currency, true)} sub={`${payments.length} payments recorded in total`} />
-        <Stat label="Retention held" value={formatMoney(retention, currency, true)} sub={`${inReview.length} invoice${inReview.length === 1 ? "" : "s"} still in review`} />
+        <Stat
+          label="Retention held"
+          value={formatMoney(retention, currency, true)}
+          sub={`${inReview.length} invoice${inReview.length === 1 ? "" : "s"} still in review`}
+        />
       </div>
 
       <Card className="mt-6">
-        <CardHeader title="To pay" subtitle="Approved invoices, most urgent first. Record full or partial payments as they go out." />
+        <CardHeader title="To pay" />
         <InvoiceTable rows={owing} role={user.role} currency={currency} threshold={threshold} showProject />
       </Card>
 
@@ -85,7 +106,7 @@ export default async function FinancePage() {
           )}
         </Card>
         <Card>
-          <CardHeader title="Financial report" subtitle="Budget against committed and paid, by project." />
+          <CardHeader title="Financial report" />
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead className="bg-bg text-left text-xs text-muted uppercase">
@@ -101,11 +122,15 @@ export default async function FinancePage() {
                 {report.map((r) => (
                   <tr key={r.p.id}>
                     <td className="px-5 py-3">
-                      <Link href={`/projects/${r.p.id}/budget`} className="font-medium hover:underline">{r.p.name}</Link>
+                      <Link href={`/projects/${r.p.id}/budget`} className="font-medium hover:underline">
+                        {r.p.name}
+                      </Link>
                       <p className="text-xs text-muted">Retention {money(r.retention)}</p>
                     </td>
                     <td className="px-3 py-3 text-right">{formatMoney(r.budget, currency, true)}</td>
-                    <td className={`px-3 py-3 text-right ${r.committed > r.budget ? "font-medium text-bad" : ""}`}>{formatMoney(r.committed, currency, true)}</td>
+                    <td className={`px-3 py-3 text-right ${r.committed > r.budget ? "font-medium text-bad" : ""}`}>
+                      {formatMoney(r.committed, currency, true)}
+                    </td>
                     <td className="px-3 py-3 text-right">{formatMoney(r.paid, currency, true)}</td>
                     <td className="px-5 py-3 text-right font-medium">{formatMoney(r.outstanding, currency, true)}</td>
                   </tr>

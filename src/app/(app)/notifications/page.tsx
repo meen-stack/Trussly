@@ -10,7 +10,11 @@ export const metadata: Metadata = { title: "Notifications" };
 
 export default async function NotificationsPage() {
   const user = await requireUser();
-  const items = await db.notification.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 100 });
+  const items = await db.notification.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
   const unread = items.filter((n) => !n.readAt).length;
   return (
     <>

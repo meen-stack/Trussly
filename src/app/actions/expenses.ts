@@ -12,6 +12,8 @@ import { summarizeLine, WARN_AT } from "@/lib/budget";
 import { paidOf } from "@/lib/status";
 import { blocksPayment, canReleaseRetention, retentionHeld } from "@/lib/commercial";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
+import { actsForOwner, ownerSideRoles } from "@/lib/release";
+import { addConfirmation, clearConfirmations } from "@/lib/confirmations";
 import { filesFrom, storeFile } from "@/lib/storage";
 import type { FormState } from "./auth";
 
@@ -105,8 +107,29 @@ export async function decideExpense(projectId: string, expenseId: string, _: For
   const note = String(form.get("note") ?? "").trim() || null;
   if (action === "reject" && !note) return { error: "Say why it's rejected." };
   const company = user.company;
-  const result = nextInvoiceStatus(expense.status, action, user.role, { amount: expense.amount, threshold: company.approvalThreshold, workStatus: expense.milestone?.status });
+  const ctx = { amount: expense.amount, threshold: company.approvalThreshold, workStatus: expense.milestone?.status, twoFrom: company.twoPersonFrom };
+  // Someone whose role the owner has delegated can decide where the owner would.
+  const role = expense.status === "OWNER_REVIEW" && actsForOwner(user.role, company) ? "OWNER" : user.role;
+  const result = nextInvoiceStatus(expense.status, action, role, ctx);
   if (!result.ok) return { error: result.error };
+  let onBehalf = false;
+  if (action === "approve") {
+    if (form.get("confirm") !== "on") return { error: "Tick the box to confirm the invoice and what the money is for." };
+    const confirmed = await addConfirmation({
+      user,
+      projectId: project.id,
+      kind: "INVOICE",
+      targetId: expense.id,
+      amount: expense.amount,
+      requesterId: expense.submitterId,
+      statement: `Invoice is genuine. The money is for: ${expense.description}`,
+      singleOk: () => true,
+    });
+    if (!confirmed.ok) return { error: confirmed.error };
+    onBehalf = confirmed.asOwner;
+  } else {
+    await clearConfirmations("INVOICE", expense.id);
+  }
 
   await db.expense.update({
     where: { id: expense.id },
@@ -116,7 +139,7 @@ export async function decideExpense(projectId: string, expenseId: string, _: For
   const label = `${money} from ${expense.vendor}`;
   await audit(
     user.id,
-    result.next === "OWNER_REVIEW" ? `approved ${label} and sent it to the owner` : `${action === "approve" ? "approved" : "rejected"} ${label}`,
+    (result.next === "OWNER_REVIEW" ? `confirmed ${label} and sent it to the owner` : `${action === "approve" ? "confirmed" : "rejected"} ${label}`) + (onBehalf ? " on behalf of the owner" : ""),
     "Expense",
     expense.id,
     project.id,
@@ -125,7 +148,7 @@ export async function decideExpense(projectId: string, expenseId: string, _: For
 
   const href = `/projects/${project.id}/budget`;
   if (result.next === "OWNER_REVIEW") {
-    await notifyProjectRoles(project.id, ["OWNER"], { title: `Invoice approval needed: ${money}`, body: `This invoice is over your ${formatMoney(company.approvalThreshold, company.currency)} limit. ${user.name} has approved it.`, href });
+    await notifyProjectRoles(project.id, ownerSideRoles(company), { title: `Invoice approval needed: ${money}`, body: `${user.name} has confirmed it. It needs your confirmation too before it can be paid.`, href });
   } else if (result.next === "APPROVED") {
     await notifyUsers([expense.submitterId], { title: `Invoice approved: ${money}`, body: `${expense.vendor}. It's now with finance for payment.`, href });
     await notifyProjectRoles(project.id, ["FINANCE"], { title: `Ready to pay: ${money}`, body: `${expense.vendor} on ${project.name} is approved for payment.`, href: "/finance" });
@@ -199,18 +222,42 @@ export async function payExpense(projectId: string, expenseId: string, _: FormSt
 export async function releaseRetention(projectId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const project = await getProjectForUser(user, projectId);
-  if (!canReleaseRetention(user.role, project.status)) return { error: project.status === "COMPLETED" ? "Only the owner or manager can release retention." : "Retention is released at handover. Mark the project completed first." };
+  const company = user.company;
+  const allowed = canReleaseRetention(user.role, project.status) || (project.status === "COMPLETED" && (user.role === "FINANCE" || actsForOwner(user.role, company)));
+  if (!allowed) return { error: project.status === "COMPLETED" ? "Only the owner, manager or accountant can release retention." : "Retention is released at handover. Mark the project completed first." };
   if (form.get("confirm") !== "on") return { error: "Tick the box to confirm handover." };
   const invoices = retentionHeld(await db.expense.findMany({ where: { budgetLine: { projectId: project.id } } }));
   if (invoices.length === 0) return { error: "No retention is held on this project." };
-  const now = new Date();
-  const due = new Date(now.getTime() + user.company.paymentTermsDays * DAY);
-  await db.$transaction(
-    invoices.map((e) => db.expense.update({ where: { id: e.id }, data: { retentionReleasedAt: now, retentionReleasedById: user.id, status: statusAfterRelease(e.status), dueDate: e.status === "PAID" ? due : e.dueDate } })),
-  );
   const total = invoices.reduce((s, e) => s + e.retention, 0);
-  const money = (c: number) => formatMoney(c, user.company.currency);
-  await audit(user.id, `released ${money(total)} of retention on ${invoices.length} invoice${invoices.length === 1 ? "" : "s"} at handover`, "Project", project.id, project.id);
+  const money = (c: number) => formatMoney(c, company.currency);
+
+  const confirmed = await addConfirmation({
+    user,
+    projectId: project.id,
+    kind: "RETENTION",
+    targetId: project.id,
+    amount: total,
+    statement: `Handover is complete. ${money(total)} of retention is owed to the contractors.`,
+    singleOk: (role) => canReleaseRetention(role, project.status),
+  });
+  if (!confirmed.ok) return { error: confirmed.error };
+  const behalf = confirmed.asOwner ? " on behalf of the owner" : "";
+  if (!confirmed.complete) {
+    await audit(user.id, `confirmed the release of ${money(total)} of retention${behalf}`, "Project", project.id, project.id);
+    const waitingOn = confirmed.asOwner || user.role === "OWNER" ? (["MANAGER", "FINANCE"] as const) : ownerSideRoles(company);
+    await notifyProjectRoles(project.id, [...waitingOn], { title: `Confirm retention release: ${money(total)}`, body: `${user.name} confirmed handover on ${project.name}. A second person must confirm before it's paid.`, href: `/projects/${project.id}/budget` }, user.id);
+    refresh(project.id);
+    return { success: "Confirmed. A second person must confirm before it's released." };
+  }
+
+  const now = new Date();
+  const due = new Date(now.getTime() + company.paymentTermsDays * DAY);
+  await db.$transaction([
+    ...invoices.map((e) => db.expense.update({ where: { id: e.id }, data: { retentionReleasedAt: now, retentionReleasedById: user.id, status: statusAfterRelease(e.status), dueDate: e.status === "PAID" ? due : e.dueDate } })),
+    // Later retention on this project needs fresh confirmations.
+    db.confirmation.updateMany({ where: { kind: "RETENTION", targetId: project.id }, data: { targetId: `${project.id}:${now.getTime()}` } }),
+  ]);
+  await audit(user.id, `released ${money(total)} of retention on ${invoices.length} invoice${invoices.length === 1 ? "" : "s"} at handover${behalf}`, "Project", project.id, project.id);
   const bySubmitter = new Map<string, number>();
   for (const e of invoices) bySubmitter.set(e.submitterId, (bySubmitter.get(e.submitterId) ?? 0) + e.retention);
   for (const [id, amount] of bySubmitter) {

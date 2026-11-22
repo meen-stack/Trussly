@@ -13,19 +13,30 @@ export function DecisionForm({
   approveLabel = "Approve",
   rejectLabel = "Reject",
   notePlaceholder = "Note (required to reject)",
+  canApprove = true,
+  confirmText,
 }: {
   action: (s: State, f: FormData) => Promise<State>;
   signAs?: string;
   approveLabel?: string;
   rejectLabel?: string;
   notePlaceholder?: string;
+  canApprove?: boolean;
+  /** A statement the approver must tick, such as what the money is for. */
+  confirmText?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   if (state?.success) return <p className="mt-3 rounded-lg border border-ok/20 bg-ok/5 px-3 py-2 text-sm text-ok">{state.success}</p>;
   return (
     <form action={formAction} className="mt-3 space-y-2 rounded-lg border border-line bg-bg p-3">
       <Textarea name="note" rows={2} placeholder={notePlaceholder} />
-      {signAs && (
+      {canApprove && confirmText && (
+        <label className="flex items-start gap-2 text-xs">
+          <input type="checkbox" name="confirm" className="mt-0.5 accent-[#ffc107]" />
+          <span>{confirmText}</span>
+        </label>
+      )}
+      {canApprove && signAs && (
         <label className="block space-y-1">
           <span className="flex items-center gap-1.5 text-xs font-medium">
             <PenLine className="h-3.5 w-3.5" /> Sign to approve: type your full name
@@ -35,9 +46,11 @@ export function DecisionForm({
       )}
       <FormError message={state?.error} />
       <div className="flex flex-wrap gap-2">
-        <Button name="decision" value="approve" variant="success" disabled={pending}>
-          {approveLabel}
-        </Button>
+        {canApprove && (
+          <Button name="decision" value="approve" variant="success" disabled={pending}>
+            {approveLabel}
+          </Button>
+        )}
         <Button name="decision" value="reject" variant="danger" disabled={pending}>
           {rejectLabel}
         </Button>

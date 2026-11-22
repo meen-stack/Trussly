@@ -88,17 +88,23 @@ enum DisputeStatus {
 }
 
 model Company {
-  id                String         @id @default(cuid())
-  name              String
-  currency          String         @default("USD")
-  approvalThreshold Int            @default(1000000) // cents; spend above this needs owner approval
-  retentionPercent  Int            @default(5) // held back from contractor invoices until handover
-  paymentTermsDays  Int            @default(30)
-  createdAt         DateTime       @default(now())
-  users             User[]
-  projects          Project[]
-  invites           Invite[]
-  conversations     Conversation[]
+  id                 String         @id @default(cuid())
+  name               String
+  currency           String         @default("USD")
+  approvalThreshold  Int            @default(1000000) // cents; spend above this needs owner approval
+  retentionPercent   Int            @default(5) // held back from contractor invoices until handover
+  paymentTermsDays   Int            @default(30)
+  /// cents; releasing money at or above this needs the owner and one more person. 0 means always.
+  twoPersonFrom      Int            @default(0)
+  /// Roles that can sign and approve in the owner's place.
+  ownerDelegateRoles Role[]         @default([])
+  /// When that delegation ends; null means until the owner turns it off.
+  delegationEndsAt   DateTime?
+  createdAt          DateTime       @default(now())
+  users              User[]
+  projects           Project[]
+  invites            Invite[]
+  conversations      Conversation[]
 }
 
 model User {
@@ -119,6 +125,7 @@ model User {
   changeOrders    ChangeOrder[]        @relation("ChangeRequester")
   changeDecided   ChangeOrder[]        @relation("ChangeDecider")
   purchases       PurchaseOrder[]
+  confirmations   Confirmation[]
   movements       MaterialMovement[]
   documents       Document[]
   signatures      Signature[]
@@ -156,29 +163,30 @@ model PasswordReset {
 }
 
 model Project {
-  id           String          @id @default(cuid())
-  name         String
-  location     String
-  description  String?
-  coverUrl     String?
-  status       ProjectStatus   @default(ACTIVE)
-  startDate    DateTime
-  endDate      DateTime
-  companyId    String
-  company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdAt    DateTime        @default(now())
-  members      ProjectMember[]
-  budgetLines  BudgetLine[]
-  milestones   Milestone[]
-  reports      DailyReport[]
-  auditEvents  AuditEvent[]
-  changeOrders ChangeOrder[]
-  purchases    PurchaseOrder[]
-  materials    Material[]
-  documents    Document[]
-  ratings      Rating[]
-  disputes     Dispute[]
-  conversation Conversation?
+  id            String          @id @default(cuid())
+  name          String
+  location      String
+  description   String?
+  coverUrl      String?
+  status        ProjectStatus   @default(ACTIVE)
+  startDate     DateTime
+  endDate       DateTime
+  companyId     String
+  company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+  members       ProjectMember[]
+  budgetLines   BudgetLine[]
+  milestones    Milestone[]
+  reports       DailyReport[]
+  auditEvents   AuditEvent[]
+  changeOrders  ChangeOrder[]
+  purchases     PurchaseOrder[]
+  materials     Material[]
+  documents     Document[]
+  ratings       Rating[]
+  disputes      Dispute[]
+  conversation  Conversation?
+  confirmations Confirmation[]
 }
 
 model ProjectMember {
@@ -537,4 +545,24 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
+}
+
+/// One person's confirmation that money can be released, with what they confirmed it is for.
+model Confirmation {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// INVOICE, RETENTION, CHANGE_ORDER or PURCHASE_ORDER
+  kind            String
+  /// The invoice, change order or purchase order id, or the project id for retention.
+  targetId        String
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The role they confirmed as: OWNER when acting in the owner's place.
+  role            Role
+  onBehalfOfOwner Boolean  @default(false)
+  statement       String
+  createdAt       DateTime @default(now())
+
+  @@index([kind, targetId])
 }

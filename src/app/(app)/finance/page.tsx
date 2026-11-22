@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Finance" };
 export default async function FinancePage() {
   const user = await requireUser();
   if (!can.seeFinance(user.role)) notFound();
-  const { currency, approvalThreshold: threshold } = user.company;
+  const { currency } = user.company;
   const project = visibleProjectsWhere(user);
   const [invoices, projects] = await Promise.all([
     db.expense.findMany({
@@ -80,7 +80,7 @@ export default async function FinancePage() {
 
       <Card className="mt-6">
         <CardHeader title="To pay" />
-        <InvoiceTable rows={owing} role={user.role} currency={currency} threshold={threshold} showProject />
+        <InvoiceTable rows={owing} user={user} showProject />
       </Card>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -144,7 +144,7 @@ export default async function FinancePage() {
       {refused.length > 0 && (
         <Card className="mt-6">
           <CardHeader title="Refused payments" />
-          <InvoiceTable rows={refused} role={user.role} currency={currency} threshold={threshold} showProject />
+          <InvoiceTable rows={refused} user={user} showProject />
         </Card>
       )}
     </>

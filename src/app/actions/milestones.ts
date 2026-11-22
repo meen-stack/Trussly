@@ -9,6 +9,7 @@ import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { formatMoney } from "@/lib/money";
 import { mediaFrom } from "@/lib/storage";
 import type { FormState } from "./auth";
+import { actsForOwner } from "@/lib/release";
 
 const VERB: Record<WorkAction, string> = {
   start: "started work on",
@@ -30,7 +31,9 @@ export async function transitionWork(projectId: string, milestoneId: string, _: 
   if (!work) return { error: "Work item not found." };
   if (user.role === "CONTRACTOR" && work.assigneeId && work.assigneeId !== user.id) return { error: "This work is assigned to another contractor." };
 
-  const result = nextWorkStatus(work.status, action, user.role, work.paymentAmount, user.company.approvalThreshold);
+  // Roles the owner has delegated can give the owner's final approval.
+  const onBehalf = work.status === "AWAITING_OWNER" && actsForOwner(user.role, user.company);
+  const result = nextWorkStatus(work.status, action, onBehalf ? "OWNER" : user.role, work.paymentAmount, user.company.approvalThreshold);
   if (!result.ok) return { error: result.error };
   if (NEEDS_NOTE.includes(action) && !note) return { error: "Say what needs fixing so the contractor knows." };
 
@@ -58,7 +61,7 @@ export async function transitionWork(projectId: string, milestoneId: string, _: 
       ...(urls.length && { photos: { create: urls.map((url) => ({ url, caption: note })) } }),
     },
   });
-  await audit(user.id, `${VERB[action]} "${work.title}"`, "Milestone", work.id, project.id, note ? { note } : undefined);
+  await audit(user.id, `${VERB[action]} "${work.title}"${onBehalf ? " on behalf of the owner" : ""}`, "Milestone", work.id, project.id, note ? { note } : undefined);
 
   const href = `/projects/${project.id}/milestones`;
   const contractor = work.assigneeId ? [work.assigneeId] : [];

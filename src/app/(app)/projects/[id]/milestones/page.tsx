@@ -20,6 +20,7 @@ import { InlineForm } from "@/components/decision-form";
 import { ratingScore } from "@/lib/commercial";
 import { directUploads } from "@/lib/storage";
 import { Media } from "@/components/media";
+import { actsForOwner } from "@/lib/release";
 
 export const metadata: Metadata = { title: "Work" };
 
@@ -82,7 +83,7 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
         )}
         {work.map((m) => {
           const mine = user.role !== "CONTRACTOR" || !m.assigneeId || m.assigneeId === user.id;
-          const options = mine ? workOptions(m.status, user.role, m.paymentAmount, threshold) : [];
+          const options = mine ? workOptions(m.status, m.status === "AWAITING_OWNER" && actsForOwner(user.role, user.company) ? "OWNER" : user.role, m.paymentAmount, threshold) : [];
           const reached = REACHED[m.status];
           const needsOwner = m.paymentAmount > threshold;
           const steps = ["Submitted", "Inspected", "Manager", ...(needsOwner ? ["Owner"] : []), "Verified"];

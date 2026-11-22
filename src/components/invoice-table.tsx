@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { format } from "date-fns";
-import { FileText } from "lucide-react";
-import type { BudgetLine as Budgetline, Milestone, Payment, Expense, Project, User, Role } from "@prisma/client";
+import { Check, FileText } from "lucide-react";
+import type { BudgetLine as Budgetline, Milestone, Payment, Expense, Project, User } from "@prisma/client";
+import type { CurrentUser } from "@/lib/auth";
+import { confirmationsFor } from "@/lib/confirmations";
+import { actsForOwner, confirmAs } from "@/lib/release";
+import { ROLE_LABEL } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
 import { nextInvoiceStatus } from "@/lib/workflow";
 import { balanceOf, paidOf } from "@/lib/status";
@@ -22,16 +26,28 @@ export type InvoiceRow = Expense & {
 const OPTIONS: InvoiceOption[] = ["approve", "reject", "process", "pay", "rejectPayment"];
 
 /** Invoices with their work status, payment status and the actions this user can take. */
-export function InvoiceTable({ rows, role, currency, threshold, showProject = false }: { rows: InvoiceRow[]; role: Role; currency: string; threshold: number; showProject?: boolean }) {
+export async function InvoiceTable({ rows, user, showProject = false }: { rows: InvoiceRow[]; user: CurrentUser; showProject?: boolean }) {
   if (rows.length === 0) return <EmptyState title="No invoices yet" />;
+  const { currency, approvalThreshold: threshold, twoPersonFrom } = user.company;
+  const confirmations = await confirmationsFor("INVOICE", rows.map((r) => r.id));
   return (
     <ul className="divide-y divide-line">
       {rows.map((e) => {
         const onHold = blocksPayment(e.disputes);
-        const options = OPTIONS.filter((a) => nextInvoiceStatus(e.status, a, role, { amount: e.amount, threshold, workStatus: e.milestone?.status }).ok && !(onHold && (a === "pay" || a === "process")));
+        const confirmed = confirmations.filter((c) => c.targetId === e.id);
+        // Someone whose role the owner delegated can decide where the owner would.
+        const role = e.status === "OWNER_REVIEW" && actsForOwner(user.role, user.company) ? "OWNER" : user.role;
+        const canConfirm = confirmAs({ user, company: user.company, amount: e.amount, requesterId: e.submitterId, prior: confirmed, singleOk: () => true }).ok;
+        const options = OPTIONS.filter(
+          (a) =>
+            nextInvoiceStatus(e.status, a, role, { amount: e.amount, threshold, workStatus: e.milestone?.status, twoFrom: twoPersonFrom }).ok &&
+            !(onHold && (a === "pay" || a === "process")) &&
+            !((a === "approve" || a === "reject") && e.submitterId === user.id) &&
+            !(a === "approve" && !canConfirm),
+        );
         const paid = paidOf(e);
         const balance = balanceOf(e);
-        const blocked = e.status === "SUBMITTED" && role === "MANAGER" && e.milestone && e.milestone.status !== "VERIFIED";
+        const blocked = e.status === "SUBMITTED" && user.role === "MANAGER" && e.milestone && e.milestone.status !== "VERIFIED";
         return (
           <li key={e.id} className="grid gap-3 px-5 py-4 text-sm sm:grid-cols-[1fr_auto]">
             <div className="min-w-0">
@@ -73,6 +89,19 @@ export function InvoiceTable({ rows, role, currency, threshold, showProject = fa
                   ))}
                 </ul>
               )}
+              {confirmed.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5 text-xs">
+                  {confirmed.map((c) => (
+                    <li key={c.id} className="flex items-center gap-1 text-ok">
+                      <Check className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Confirmed by {c.user.name}, {c.onBehalfOfOwner ? "for the owner" : ROLE_LABEL[c.role]} · {format(c.createdAt, "MMM d, h:mm a")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {e.status === "OWNER_REVIEW" && <p className="mt-1 text-xs font-medium text-warn">Waiting for the owner&apos;s confirmation</p>}
               {e.reviewNote && <p className={cn("mt-1 text-xs", e.status.includes("REJECTED") && "text-bad")}>Note: {e.reviewNote}</p>}
               {blocked && <p className="mt-1 text-xs font-medium text-warn">Can be approved once the work is verified.</p>}
               {onHold && (
@@ -91,6 +120,7 @@ export function InvoiceTable({ rows, role, currency, threshold, showProject = fa
                 decide={decideExpense.bind(null, e.budgetLine.projectId, e.id)}
                 pay={payExpense.bind(null, e.budgetLine.projectId, e.id)}
                 options={options}
+                purpose={e.description}
                 balance={(balance / 100).toFixed(2)}
               />
             </div>

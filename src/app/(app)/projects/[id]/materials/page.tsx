@@ -8,13 +8,17 @@ import { formatMoney, formatUnitPrice } from "@/lib/money";
 import { canReceive, poReceivedValue, poTotal, stockOf } from "@/lib/commercial";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Select, Stat } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
-import { InlineForm } from "@/components/decision-form";
-import { addMaterial, createPurchaseOrder, decidePurchaseOrder, receiveDelivery, recordMovement } from "@/app/actions/materials";
+import { ButtonsForm, InlineForm } from "@/components/decision-form";
+import { actsForOwner, confirmAs } from "@/lib/release";
+import { confirmationsFor } from "@/lib/confirmations";
+import { ROLE_LABEL } from "@/lib/permissions";
+import { Check } from "lucide-react";
+import { addMaterial, confirmPurchaseOrder, createPurchaseOrder, decidePurchaseOrder, receiveDelivery, recordMovement } from "@/app/actions/materials";
 
 export const metadata: Metadata = { title: "Materials & orders" };
 
 const PO_LABEL = {
-  PENDING_APPROVAL: ["Awaiting owner", "warn"],
+  PENDING_APPROVAL: ["Awaiting approval", "warn"],
   ISSUED: ["Issued", "brand"],
   PARTIALLY_RECEIVED: ["Partly delivered", "warn"],
   RECEIVED: ["Delivered", "ok"],
@@ -73,6 +77,7 @@ export default async function MaterialsPage({ params }: PageProps<"/projects/[id
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 12);
 
+  const confirmedPo = await confirmationsFor("PURCHASE_ORDER", orders.filter((o) => o.status === "PENDING_APPROVAL").map((o) => o.id));
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -251,16 +256,42 @@ export default async function MaterialsPage({ params }: PageProps<"/projects/[id
                 <p className="mt-2 text-xs text-muted">
                   Raised by {o.createdBy.name}, {format(o.createdAt, "MMM d")} · {formatMoney(invoiced, currency)} invoiced
                 </p>
-                {o.status === "PENDING_APPROVAL" && user.role === "OWNER" && (
-                  <form action={decidePurchaseOrder.bind(null, project.id, o.id)} className="mt-3 flex gap-2">
-                    <Button name="decision" value="approve" variant="success">
-                      Approve order
-                    </Button>
-                    <Button name="decision" value="cancel" variant="danger">
-                      Cancel
-                    </Button>
-                  </form>
-                )}
+                {confirmedPo
+                  .filter((c) => c.targetId === o.id)
+                  .map((c) => (
+                    <p key={c.id} className="mt-1.5 flex items-center gap-1 text-xs text-ok">
+                      <Check className="h-3.5 w-3.5" /> Confirmed by {c.user.name}, {c.onBehalfOfOwner ? "for the owner" : ROLE_LABEL[c.role]} · {format(c.createdAt, "MMM d, h:mm a")}
+                    </p>
+                  ))}
+                {o.status === "PENDING_APPROVAL" &&
+                  (() => {
+                    const mine = confirmedPo.filter((c) => c.targetId === o.id);
+                    const check = confirmAs({ user, company: user.company, amount: total, requesterId: o.createdById, prior: mine, singleOk: (r) => r === "OWNER" });
+                    const canCancel = user.role === "OWNER" || user.role === "MANAGER" || actsForOwner(user.role, user.company);
+                    if (!check.ok && !canCancel) return null;
+                    return (
+                      <ButtonsForm action={confirmPurchaseOrder.bind(null, project.id, o.id)} className="mt-3 space-y-2 rounded-lg border border-line bg-bg p-3">
+                        {check.ok && (
+                          <label className="flex items-start gap-2 text-xs">
+                            <input type="checkbox" name="confirm" className="mt-0.5 accent-[#ffc107]" />
+                            <span>I confirm this order is needed and the money is for these materials from {o.supplier}.</span>
+                          </label>
+                        )}
+                        <div className="flex gap-2">
+                          {check.ok && (
+                            <Button name="decision" value="approve" variant="success">
+                              {check.complete ? "Approve order" : "Confirm"}
+                            </Button>
+                          )}
+                          {canCancel && (
+                            <Button name="decision" value="cancel" variant="danger">
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
+                      </ButtonsForm>
+                    );
+                  })()}
                 {receivable && (
                   <details className="mt-3 rounded-lg border border-line bg-bg p-3 text-sm">
                     <summary className="cursor-pointer font-medium">Receive a delivery</summary>

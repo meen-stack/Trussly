@@ -13,6 +13,10 @@ import { ActionForm } from "@/components/action-form";
 import { InvoiceTable, invoiceInclude } from "@/components/invoice-table";
 import { releaseRetention, submitExpense } from "@/app/actions/expenses";
 import { addBudgetLine, updateBudgetLine } from "@/app/actions/projects";
+import { confirmAs } from "@/lib/release";
+import { confirmationsFor } from "@/lib/confirmations";
+import { ROLE_LABEL } from "@/lib/permissions";
+import { Check } from "lucide-react";
 
 export const metadata: Metadata = { title: "Budget & spend" };
 
@@ -21,7 +25,6 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
   const currency = user.company.currency;
-  const threshold = user.company.approvalThreshold;
   const lines = await db.budgetLine.findMany({
     where: { projectId: project.id },
     include: {
@@ -87,6 +90,14 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const heldTotal = held.reduce((s, e) => s + e.retention, 0);
   const released = expenses.filter((e) => e.retentionReleasedAt).reduce((s, e) => s + e.retention, 0);
 
+  const retentionConfirms = heldTotal > 0 ? await confirmationsFor("RETENTION", [project.id]) : [];
+  const retentionCheck = confirmAs({
+    user,
+    company: user.company,
+    amount: heldTotal,
+    prior: retentionConfirms,
+    singleOk: (r) => canReleaseRetention(r, project.status),
+  });
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -121,16 +132,27 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
               {released > 0 && ` ${formatMoney(released, currency)} released at handover.`}
             </p>
           </div>
-          {heldTotal > 0 && canReleaseRetention(user.role, project.status) && (
-            <ActionForm
-              action={releaseRetention.bind(null, project.id)}
-              submitLabel={`Release ${formatMoney(heldTotal, currency)}`}
-              className="flex flex-col gap-2 sm:items-end"
-            >
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="confirm" className="accent-[#ffc107]" /> The project is handed over
-              </label>
-            </ActionForm>
+          {heldTotal > 0 && project.status === "COMPLETED" && (
+            <div className="flex flex-col gap-2 sm:items-end">
+              {retentionConfirms.map((c) => (
+                <p key={c.id} className="flex items-center gap-1 text-xs text-ok">
+                  <Check className="h-3.5 w-3.5" /> Confirmed by {c.user.name}, {c.onBehalfOfOwner ? "for the owner" : ROLE_LABEL[c.role]}
+                </p>
+              ))}
+              {retentionCheck.ok ? (
+                <ActionForm
+                  action={releaseRetention.bind(null, project.id)}
+                  submitLabel={retentionCheck.complete ? `Release ${formatMoney(heldTotal, currency)}` : "Confirm release"}
+                  className="flex flex-col gap-2 sm:items-end"
+                >
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="confirm" className="accent-[#ffc107]" /> The project is handed over and this money is owed
+                  </label>
+                </ActionForm>
+              ) : (
+                retentionConfirms.length > 0 && <p className="text-xs font-medium text-warn">Waiting for a second person</p>
+              )}
+            </div>
           )}
         </Card>
       )}
@@ -246,7 +268,7 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
 
       <Card>
         <CardHeader title="Invoices and payments" />
-        <InvoiceTable rows={expenses} role={user.role} currency={currency} threshold={threshold} />
+        <InvoiceTable rows={expenses} user={user} />
       </Card>
     </div>
   );

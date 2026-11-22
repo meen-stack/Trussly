@@ -66,6 +66,8 @@ export type InvoiceContext = {
   threshold: number;
   /** Status of the work this invoice bills for, if any. */
   workStatus?: MilestoneStatus | null;
+  /** At or above this amount the owner must confirm too, whatever the approval limit. */
+  twoFrom?: number;
 };
 
 const isFinance = (r: Role) => r === "FINANCE" || r === "ADMIN";
@@ -76,7 +78,8 @@ export function nextInvoiceStatus(current: ExpenseStatus, action: InvoiceAction,
       if (current === "SUBMITTED") {
         if (role !== "MANAGER") return { ok: false, error: "The project manager reviews new invoices first." };
         if (ctx.workStatus && ctx.workStatus !== "VERIFIED") return { ok: false, error: "The work on this invoice must be verified before it can be approved." };
-        return { ok: true, next: ctx.amount > ctx.threshold ? "OWNER_REVIEW" : "APPROVED" };
+        const ownerToo = ctx.amount > ctx.threshold || (ctx.twoFrom !== undefined && ctx.amount >= ctx.twoFrom);
+        return { ok: true, next: ownerToo ? "OWNER_REVIEW" : "APPROVED" };
       }
       if (current === "OWNER_REVIEW") {
         if (role !== "OWNER") return { ok: false, error: "This invoice is waiting for the owner." };

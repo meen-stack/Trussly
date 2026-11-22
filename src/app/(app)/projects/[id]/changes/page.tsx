@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { canDecideChange, canProposeChange, originalBudget } from "@/lib/commercial";
+import { actsForOwner, confirmAs, needsTwo, waitingFor } from "@/lib/release";
+import { confirmationsFor } from "@/lib/confirmations";
 import { shortPrint } from "@/lib/signature";
 import { Badge, Card, EmptyState, Field, Input, Select, Stat, Textarea } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
@@ -35,7 +37,7 @@ export default async function ChangesPage({ params }: PageProps<"/projects/[id]/
         milestone: true,
         requestedBy: true,
         decidedBy: true,
-        signatures: true,
+        signatures: { include: { user: { select: { role: true } } }, orderBy: { signedAt: "asc" } },
       },
       orderBy: { number: "desc" },
     }),
@@ -58,6 +60,8 @@ export default async function ChangesPage({ params }: PageProps<"/projects/[id]/
   const days = approved.reduce((s, c) => s + c.daysImpact, 0);
   const original = lines.reduce((s, l) => s + originalBudget(l.budgeted, l.changeOrders), 0);
   const pending = changes.filter((c) => c.status === "PROPOSED");
+  const prior = await confirmationsFor("CHANGE_ORDER", pending.map((c) => c.id));
+  const ownerSide = user.role === "OWNER" || actsForOwner(user.role, user.company);
 
   return (
     <div className="space-y-6">
@@ -85,9 +89,13 @@ export default async function ChangesPage({ params }: PageProps<"/projects/[id]/
             </Card>
           )}
           {changes.map((c) => {
-            const sig = c.signatures[0];
-            const decide = c.status === "PROPOSED" && canDecideChange(user.role, c.amount, threshold);
-            const needsOwner = Math.abs(c.amount) > threshold;
+            const mine = prior.filter((p) => p.targetId === c.id);
+            const two = c.amount > 0 && needsTwo(c.amount, user.company.twoPersonFrom);
+            const canSign =
+              c.status === "PROPOSED" &&
+              confirmAs({ user, company: user.company, amount: c.amount, two, requesterId: c.requestedById, prior: mine, singleOk: (r) => canDecideChange(r, c.amount, threshold) }).ok;
+            const canReject = c.status === "PROPOSED" && c.requestedById !== user.id && (canDecideChange(user.role, c.amount, threshold) || ownerSide || user.role === "MANAGER");
+            const waiting = c.status === "PROPOSED" ? (two ? (mine.length ? `Signed ${mine.length} of 2 · waiting for ${waitingFor(mine, true)}` : "Needs 2 signatures") : Math.abs(c.amount) > threshold ? "Owner decides" : null) : null;
             return (
               <Card key={c.id} className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -114,7 +122,7 @@ export default async function ChangesPage({ params }: PageProps<"/projects/[id]/
                 <p className="mt-2 text-sm">{c.reason}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
                   <Badge tone={TONE[c.status]}>{LABEL[c.status]}</Badge>
-                  {c.status === "PROPOSED" && needsOwner && <Badge tone="brand">Owner decides</Badge>}
+                  {waiting && <Badge tone="brand">{waiting}</Badge>}
                   <span>
                     Proposed by {c.requestedBy.name} ({ROLE_LABEL[c.requestedBy.role]}), {format(c.createdAt, "MMM d")}
                   </span>
@@ -124,19 +132,27 @@ export default async function ChangesPage({ params }: PageProps<"/projects/[id]/
                     <span className="font-medium">{c.decidedBy?.name}:</span> {c.decisionNote}
                   </p>
                 )}
-                {sig && (
-                  <div className="mt-3 flex items-center gap-3 rounded-lg border border-ok/20 bg-ok/5 px-3 py-2 text-xs">
+                {c.signatures.map((sig) => (
+                  <div key={sig.id} className="mt-3 flex items-center gap-3 rounded-lg border border-ok/20 bg-ok/5 px-3 py-2 text-xs">
                     <PenLine className="h-4 w-4 shrink-0 text-ok" />
                     <div>
                       <p>
-                        <span className="font-display text-sm italic">{sig.signedName}</span> · {ROLE_LABEL[sig.role]} ·{" "}
+                        <span className="font-display text-sm italic">{sig.signedName}</span> · {sig.role === "OWNER" && sig.user.role !== "OWNER" ? "for the owner" : ROLE_LABEL[sig.role]} ·{" "}
                         {format(sig.signedAt, "MMM d, yyyy h:mm a")}
                       </p>
                       <p className="font-mono text-[11px] text-muted">Fingerprint {shortPrint(sig.fingerprint)}</p>
                     </div>
                   </div>
+                ))}
+                {(canSign || canReject) && (
+                  <DecisionForm
+                    action={decideChangeOrder.bind(null, project.id, c.id)}
+                    signAs={user.name}
+                    approveLabel={two && !mine.length ? "Confirm and sign" : "Approve and sign"}
+                    canApprove={canSign}
+                    confirmText={`I confirm this change is needed and the money is for: ${c.reason}`}
+                  />
                 )}
-                {decide && <DecisionForm action={decideChangeOrder.bind(null, project.id, c.id)} signAs={user.name} approveLabel="Approve and sign" />}
               </Card>
             );
           })}

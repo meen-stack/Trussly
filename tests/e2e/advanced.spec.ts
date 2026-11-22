@@ -3,7 +3,7 @@ import { loginAs, openProject, VIDEO } from "./helpers";
 
 const PROJECT = "Harbour View Residences";
 
-test("change order: manager proposes, approves with a signature, budget moves", async ({ page }) => {
+test("change order: proposer can't approve it, owner and accountant both sign", async ({ page }) => {
   await loginAs(page, "MANAGER");
   await openProject(page, PROJECT, "Change orders");
   await page.locator("summary", { hasText: "Propose a change" }).click();
@@ -13,15 +13,31 @@ test("change order: manager proposes, approves with a signature, budget moves", 
   await page.locator('select[name="budgetLineId"]').selectOption({ label: "Contingency" });
   await page.getByRole("button", { name: "Propose change order" }).click();
   await expect(page.getByText(/CO-\d+ proposed\./)).toBeVisible();
-
   const card = page.locator("div.rounded-xl", { has: page.getByRole("heading", { name: "E2E: extra site lighting" }) });
-  await card.getByRole("button", { name: "Approve and sign" }).click();
-  await expect(card.getByText("Type your full name (Marcus Reid) to sign.")).toBeVisible();
-  await card.locator('input[name="signature"]').fill("Marcus Reid");
-  await card.getByRole("button", { name: "Approve and sign" }).click();
-  await expect(card.getByText("Fingerprint")).toBeVisible();
+  await expect(card.getByText("Needs 2 signatures")).toBeVisible();
+  await expect(card.getByRole("button", { name: /sign/ })).toHaveCount(0);
 
-  await page.getByRole("link", { name: "Audit trail" }).click();
+  await loginAs(page, "OWNER");
+  await openProject(page, PROJECT, "Change orders");
+  await card.locator('input[name="signature"]').fill("Olivia Bennett");
+  await card.getByRole("button", { name: "Confirm and sign" }).click();
+  await expect(card.getByText("Tick the box to confirm the change and what the money is for.")).toBeVisible();
+  await card.locator('input[name="confirm"]').check();
+  await card.locator('input[name="signature"]').fill("Olivia Bennett");
+  await card.getByRole("button", { name: "Confirm and sign" }).click();
+  await expect(card.getByText("Signed 1 of 2 · waiting for a manager or the accountant")).toBeVisible();
+
+  await loginAs(page, "FINANCE");
+  await openProject(page, PROJECT, "Change orders");
+  await expect(card.getByText("Signed 1 of 2 · waiting for a manager or the accountant")).toBeVisible();
+  await card.locator('input[name="confirm"]').check();
+  await card.locator('input[name="signature"]').fill("Fiona Reyes");
+  await card.getByRole("button", { name: "Approve and sign" }).click();
+  await expect(card.getByText("Approved", { exact: true })).toBeVisible();
+  await expect(card.getByText("Fingerprint")).toHaveCount(2);
+
+  await loginAs(page, "OWNER");
+  await openProject(page, PROJECT, "Audit trail");
   await expect(page.getByText(/approved and signed change order CO-\d+ \(\$2,500\)/).first()).toBeVisible();
   await page.getByRole("link", { name: "CSV" }).waitFor();
 });
@@ -61,12 +77,19 @@ test("documents: only the named contractor can sign", async ({ page }) => {
   await expect(doc.getByRole("button", { name: "Sign document" })).toHaveCount(0);
 });
 
-test("retention: owner releases it at handover, finance pays it", async ({ page }) => {
+test("retention: owner and manager both confirm at handover, finance pays it", async ({ page }) => {
   await loginAs(page, "OWNER");
   await openProject(page, "Cedar Park Dental Clinic", "Budget & spend");
-  await page.getByRole("button", { name: /^Release \$/ }).click();
+  await page.getByRole("button", { name: "Confirm release" }).click();
   await expect(page.getByText("Tick the box to confirm handover.")).toBeVisible();
-  await page.getByLabel("The project is handed over").check();
+  await page.getByLabel(/The project is handed over/).check();
+  await page.getByRole("button", { name: "Confirm release" }).click();
+  await expect(page.getByText("Waiting for a second person")).toBeVisible();
+
+  await loginAs(page, "MANAGER");
+  await openProject(page, "Cedar Park Dental Clinic", "Budget & spend");
+  await expect(page.getByText("Confirmed by Olivia Bennett, Owner")).toBeVisible();
+  await page.getByLabel(/The project is handed over/).check();
   await page.getByRole("button", { name: /^Release \$/ }).click();
   await expect(page.getByText(/All retention has been released\./)).toBeVisible();
   await expect(page.getByText("Retention released · awaiting payment").first()).toBeVisible();

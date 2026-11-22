@@ -3,12 +3,14 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import type { CurrentUser } from "./auth";
 import { visibleProjectsWhere } from "./access";
+import { CONFIRMER_ROLES, actsForOwner, confirmAs } from "./release";
+import { canDecideChange, poTotal } from "./commercial";
 
 /** Work waiting on this user, by role. Shared by the nav badge, dashboard and approvals page. */
 export function approvalWhere(user: CurrentUser) {
   const project = visibleProjectsWhere(user);
   const reports: Prisma.DailyReportWhereInput | null = user.role === "MANAGER" ? { status: "SUBMITTED", project } : null;
-  const work: Prisma.MilestoneWhereInput | null =
+  const ownWork: Prisma.MilestoneWhereInput | null =
     user.role === "SUPERVISOR"
       ? { status: "SUBMITTED", project }
       : user.role === "MANAGER"
@@ -18,7 +20,9 @@ export function approvalWhere(user: CurrentUser) {
           : user.role === "CONTRACTOR"
             ? { status: "CORRECTIONS", assigneeId: user.id, project }
             : null;
-  const expenses: Prisma.ExpenseWhereInput | null =
+  const delegateWork: Prisma.MilestoneWhereInput | null = actsForOwner(user.role, user.company) ? { status: "AWAITING_OWNER", project } : null;
+  const work = ownWork && delegateWork ? { OR: [ownWork, delegateWork] } : (ownWork ?? delegateWork);
+  const own: Prisma.ExpenseWhereInput | null =
     user.role === "MANAGER"
       ? { status: "SUBMITTED", budgetLine: { project } }
       : user.role === "OWNER"
@@ -26,6 +30,9 @@ export function approvalWhere(user: CurrentUser) {
         : user.role === "FINANCE" || user.role === "ADMIN"
           ? { status: { in: ["APPROVED", "PROCESSING"] }, budgetLine: { project } }
           : null;
+  // Roles the owner has delegated to also see invoices waiting for the owner.
+  const forOwner: Prisma.ExpenseWhereInput | null = actsForOwner(user.role, user.company) ? { status: "OWNER_REVIEW", budgetLine: { project }, submitterId: { not: user.id } } : null;
+  const expenses = own && forOwner ? { OR: [own, forOwner] } : (own ?? forOwner);
   return { reports, milestones: work, expenses };
 }
 
@@ -46,21 +53,27 @@ export type QueueItem = { id: string; kind: string; title: string; sub: string; 
 export async function otherQueue(user: CurrentUser): Promise<QueueItem[]> {
   const project = visibleProjectsWhere(user);
   const t = user.company.approvalThreshold;
-  const role = user.role;
-  const changeWhere: Prisma.ChangeOrderWhereInput | null =
-    role === "MANAGER" ? { status: "PROPOSED", project, amount: { gte: -t, lte: t } } : role === "OWNER" ? { status: "PROPOSED", project, OR: [{ amount: { gt: t } }, { amount: { lt: -t } }] } : null;
+  const mayConfirm = user.role === "OWNER" || CONFIRMER_ROLES.includes(user.role) || actsForOwner(user.role, user.company);
   const [changes, orders, docs, disputes] = await Promise.all([
-    changeWhere ? db.changeOrder.findMany({ where: changeWhere, include: { project: { select: { name: true } } }, orderBy: { createdAt: "asc" } }) : [],
-    role === "OWNER" ? db.purchaseOrder.findMany({ where: { status: "PENDING_APPROVAL", project }, include: { project: { select: { name: true } }, items: true } }) : [],
+    mayConfirm ? db.changeOrder.findMany({ where: { status: "PROPOSED", project }, include: { project: { select: { name: true } } }, orderBy: { createdAt: "asc" } }) : [],
+    mayConfirm ? db.purchaseOrder.findMany({ where: { status: "PENDING_APPROVAL", project }, include: { project: { select: { name: true } }, items: true } }) : [],
     db.document.findMany({ where: { project, signerIds: { has: user.id }, signatures: { none: { userId: user.id } } }, include: { project: { select: { name: true } } } }),
-    role === "MANAGER" || role === "OWNER"
-      ? db.dispute.findMany({ where: { project, status: role === "OWNER" ? "ESCALATED" : "OPEN" }, include: { project: { select: { name: true } } } })
+    user.role === "MANAGER" || user.role === "OWNER"
+      ? db.dispute.findMany({ where: { project, status: user.role === "OWNER" ? "ESCALATED" : "OPEN" }, include: { project: { select: { name: true } } } })
       : [],
   ]);
+  const prior = await db.confirmation.findMany({ where: { targetId: { in: [...changes.map((c) => c.id), ...orders.map((o) => o.id)] } }, orderBy: { createdAt: "asc" } });
+  const priorFor = (id: string) => prior.filter((c) => c.targetId === id);
+  const waitingOnMe = changes.filter((c) =>
+    confirmAs({ user, company: user.company, amount: c.amount, two: c.amount > 0 ? undefined : false, requesterId: c.requestedById, prior: priorFor(c.id), singleOk: (r) => canDecideChange(r, c.amount, t) }).ok,
+  );
+  const ordersOnMe = orders.filter((o) =>
+    confirmAs({ user, company: user.company, amount: poTotal(o.items), requesterId: o.createdById, prior: priorFor(o.id), singleOk: (r) => r === "OWNER" }).ok,
+  );
   const money = (c: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: user.company.currency, maximumFractionDigits: 0 }).format(c / 100);
   return [
-    ...changes.map((c) => ({ id: c.id, kind: "Change order", title: `CO-${c.number}: ${c.title}`, sub: `${c.project.name} · ${money(c.amount)}`, href: `/projects/${c.projectId}/changes` })),
-    ...orders.map((o) => ({ id: o.id, kind: "Purchase order", title: `PO-${o.number}: ${o.supplier}`, sub: `${o.project.name} · ${money(o.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0))}`, href: `/projects/${o.projectId}/materials` })),
+    ...waitingOnMe.map((c) => ({ id: c.id, kind: "Change order", title: `CO-${c.number}: ${c.title}`, sub: `${c.project.name} · ${money(c.amount)}`, href: `/projects/${c.projectId}/changes` })),
+    ...ordersOnMe.map((o) => ({ id: o.id, kind: "Purchase order", title: `PO-${o.number}: ${o.supplier}`, sub: `${o.project.name} · ${money(o.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0))}`, href: `/projects/${o.projectId}/materials` })),
     ...docs.map((d) => ({ id: d.id, kind: "Signature", title: `Sign: ${d.title} v${d.version}`, sub: d.project.name, href: `/projects/${d.projectId}/documents` })),
     ...disputes.map((d) => ({ id: d.id, kind: "Dispute", title: d.title, sub: `${d.project.name} · ${d.status === "ESCALATED" ? "escalated to you" : "open"}`, href: `/projects/${d.projectId}/disputes` })),
   ];

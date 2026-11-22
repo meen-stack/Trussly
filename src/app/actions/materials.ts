@@ -10,6 +10,8 @@ import { formatMoney, parseMoney } from "@/lib/money";
 import { canReceive, initialPoStatus, poStatusAfterDelivery, poTotal, stockOf } from "@/lib/commercial";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import type { FormState } from "./auth";
+import { actsForOwner, needsTwo, ownerSideRoles } from "@/lib/release";
+import { addConfirmation, clearConfirmations } from "@/lib/confirmations";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}`, "layout");
@@ -61,41 +63,78 @@ export async function createPurchaseOrder(projectId: string, _: FormState, form:
   }
   if (items.length === 0) return { error: "Add at least one line." };
   const total = poTotal(items.map((i) => ({ ...i, received: 0 })));
-  const status = initialPoStatus(user.role, total, user.company.approvalThreshold);
-  if (!status.ok) return { error: status.error };
+  const initial = initialPoStatus(user.role, total, user.company.approvalThreshold);
+  if (!initial.ok) return { error: initial.error };
+  // Orders that need two people wait for them, whoever raised them.
+  const status = needsTwo(total, user.company.twoPersonFrom) ? { ok: true as const, next: "PENDING_APPROVAL" as const } : initial;
 
   const number = (await db.purchaseOrder.count({ where: { projectId: project.id } })) + 1;
   const po = await db.purchaseOrder.create({
     data: { projectId: project.id, number, supplier, budgetLineId: line.id, status: status.next, expectedAt: expected ? new Date(expected) : null, createdById: user.id, items: { create: items } },
   });
   const money = formatMoney(total, user.company.currency);
-  await audit(user.id, `raised PO-${number} to ${supplier} (${money})${status.next === "PENDING_APPROVAL" ? ", awaiting the owner" : ""}`, "PurchaseOrder", po.id, project.id);
+  await audit(user.id, `raised PO-${number} to ${supplier} (${money})${status.next === "PENDING_APPROVAL" ? ", awaiting approval" : ""}`, "PurchaseOrder", po.id, project.id);
   if (status.next === "PENDING_APPROVAL") {
-    await notifyProjectRoles(project.id, ["OWNER"], { title: `Purchase order approval: ${money}`, body: `${user.name} raised PO-${number} to ${supplier} on ${project.name}. It's over your limit.`, href: `/projects/${project.id}/materials` });
+    await notifyProjectRoles(project.id, [...new Set([...ownerSideRoles(user.company), "MANAGER", "FINANCE"] as const)], { title: `Purchase order approval: ${money}`, body: `${user.name} raised PO-${number} to ${supplier} on ${project.name}. It needs approval before it's issued.`, href: `/projects/${project.id}/materials` }, user.id);
   } else {
     await notifyProjectRoles(project.id, ["SUPERVISOR"], { title: `PO-${number} issued: ${supplier}`, body: `Deliveries for ${project.name} can be received against it.`, href: `/projects/${project.id}/materials` }, user.id);
   }
   refresh(project.id);
-  return { success: status.next === "PENDING_APPROVAL" ? `PO-${number} sent to the owner for approval.` : `PO-${number} issued.` };
+  return { success: status.next === "PENDING_APPROVAL" ? `PO-${number} is waiting for approval.` : `PO-${number} issued.` };
 }
 
-/** Owner approves or cancels a purchase order waiting for them; the manager can cancel one not yet received. */
+/** The manager or owner cancels an order that hasn't been received yet. */
 export async function decidePurchaseOrder(projectId: string, poId: string, form: FormData) {
   const user = await requireUser();
   const project = await getProjectForUser(user, projectId);
   const po = await db.purchaseOrder.findFirst({ where: { id: poId, projectId: project.id }, include: { items: true } });
-  if (!po) return;
-  const approve = form.get("decision") === "approve";
-  if (approve) {
-    if (po.status !== "PENDING_APPROVAL" || user.role !== "OWNER") return;
-    await db.purchaseOrder.update({ where: { id: po.id }, data: { status: "ISSUED" } });
-  } else {
-    if (!(po.status === "PENDING_APPROVAL" || po.status === "ISSUED") || !(user.role === "OWNER" || user.role === "MANAGER")) return;
-    await db.purchaseOrder.update({ where: { id: po.id }, data: { status: "CANCELLED" } });
-  }
-  await audit(user.id, `${approve ? "approved" : "cancelled"} PO-${po.number} to ${po.supplier}`, "PurchaseOrder", po.id, project.id);
-  await notifyUsers([po.createdById], { title: `PO-${po.number} ${approve ? "approved" : "cancelled"}`, body: `${po.supplier}, ${formatMoney(poTotal(po.items), user.company.currency)}.`, href: `/projects/${project.id}/materials` });
+  if (!po || form.get("decision") !== "cancel") return;
+  if (!(po.status === "PENDING_APPROVAL" || po.status === "ISSUED") || !(user.role === "OWNER" || user.role === "MANAGER" || actsForOwner(user.role, user.company))) return;
+  await db.purchaseOrder.update({ where: { id: po.id }, data: { status: "CANCELLED" } });
+  await clearConfirmations("PURCHASE_ORDER", po.id);
+  await audit(user.id, `cancelled PO-${po.number} to ${po.supplier}`, "PurchaseOrder", po.id, project.id);
+  await notifyUsers([po.createdById], { title: `PO-${po.number} cancelled`, body: `${po.supplier}, ${formatMoney(poTotal(po.items), user.company.currency)}.`, href: `/projects/${project.id}/materials` });
   refresh(project.id);
+}
+
+/** Confirms a purchase order waiting for approval. Two people when the company's rule says so, otherwise the owner. */
+export async function confirmPurchaseOrder(projectId: string, poId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const project = await getProjectForUser(user, projectId);
+  const po = await db.purchaseOrder.findFirst({ where: { id: poId, projectId: project.id }, include: { items: { include: { material: true } }, budgetLine: true } });
+  if (!po) return { error: "Order not found." };
+  if (po.status !== "PENDING_APPROVAL") return { error: "This order isn't waiting for approval." };
+  if (form.get("decision") === "cancel") {
+    await decidePurchaseOrder(projectId, poId, form);
+    return { success: "Cancelled." };
+  }
+  if (form.get("confirm") !== "on") return { error: "Tick the box to confirm the order and what it's for." };
+  const total = poTotal(po.items);
+  const money = formatMoney(total, user.company.currency);
+  const confirmed = await addConfirmation({
+    user,
+    projectId: project.id,
+    kind: "PURCHASE_ORDER",
+    targetId: po.id,
+    amount: total,
+    requesterId: po.createdById,
+    statement: `The order is needed. The money is for ${po.items.map((i) => i.material.name).join(", ")} from ${po.supplier}, on ${po.budgetLine.category}.`,
+    singleOk: (role) => role === "OWNER",
+  });
+  if (!confirmed.ok) return { error: confirmed.error };
+  const behalf = confirmed.asOwner ? " on behalf of the owner" : "";
+  const href = `/projects/${project.id}/materials`;
+  if (!confirmed.complete) {
+    await audit(user.id, `confirmed PO-${po.number} to ${po.supplier} (${money})${behalf}`, "PurchaseOrder", po.id, project.id);
+    refresh(project.id);
+    return { success: "Confirmed. One more person must confirm." };
+  }
+  await db.purchaseOrder.update({ where: { id: po.id }, data: { status: "ISSUED" } });
+  await audit(user.id, `approved PO-${po.number} to ${po.supplier} (${money})${behalf}`, "PurchaseOrder", po.id, project.id);
+  await notifyUsers([po.createdById], { title: `PO-${po.number} approved`, body: `${po.supplier}, ${money}.`, href });
+  await notifyProjectRoles(project.id, ["SUPERVISOR"], { title: `PO-${po.number} issued: ${po.supplier}`, body: `Deliveries for ${project.name} can be received against it.`, href }, user.id);
+  refresh(project.id);
+  return { success: "Approved. The order is issued." };
 }
 
 /** Supervisor or manager logs a delivery against a PO. Stock goes up by what arrived. */

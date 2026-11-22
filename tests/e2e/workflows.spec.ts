@@ -98,14 +98,22 @@ test("payments: manager and owner approve, finance pays in two parts", async ({ 
 
   const row = () => page.locator("li", { hasText: "E2E Roofing Supplies" }).first();
 
+  // The contractor who sent it can't approve it, and both the manager and the owner must confirm what it's for.
   await loginAs(page, "MANAGER");
   await openProject(page, PROJECT, "Budget & spend");
   await row().getByRole("button", { name: "Approve" }).click();
-  await expect(row().getByText("Under review")).toBeVisible();
+  await expect(row().getByText("the money is for: Roof membrane")).toBeVisible();
+  await row().locator('input[name="confirm"]').check();
+  await row().getByRole("button", { name: "Confirm" }).click();
+  await expect(row().getByText("Confirmed by Marcus Reid, Project manager")).toBeVisible();
+  await expect(row().getByText("Waiting for the owner's confirmation")).toBeVisible();
+  await expect(row().getByRole("button", { name: "Approve" })).toHaveCount(0);
 
   await loginAs(page, "OWNER");
   await page.goto("/approvals");
   await row().getByRole("button", { name: "Approve" }).click();
+  await row().locator('input[name="confirm"]').check();
+  await row().getByRole("button", { name: "Confirm" }).click();
   await expect(page.locator("li", { hasText: "E2E Roofing Supplies" })).toHaveCount(0);
 
   await loginAs(page, "FINANCE");
@@ -184,4 +192,44 @@ test("invites: the join link can be copied when email isn't set up, and works", 
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: "Join team" }).click();
   await page.waitForURL("**/dashboard");
+});
+
+test("delegation: the owner lets the accountant sign in their place", async ({ page }) => {
+  await loginAs(page, "OWNER");
+  await page.goto("/settings");
+  await page.locator('input[name="delegateRoles"][value="FINANCE"]').check();
+  await page.getByRole("button", { name: "Save approvals" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+
+  await loginAs(page, "CONTRACTOR");
+  await openProject(page, PROJECT, "Budget & spend");
+  await page.locator("summary", { hasText: "Submit an invoice" }).click();
+  await page.locator('select[name="budgetLineId"]').selectOption({ label: "Roofing" });
+  await page.locator('input[name="vendor"]').fill("E2E Delegated Supplies");
+  await page.locator('input[name="description"]').fill("Flashing");
+  await page.locator('input[name="amount"]').fill("1200");
+  await page.getByRole("button", { name: "Submit invoice" }).click();
+  const row = () => page.locator("li", { hasText: "E2E Delegated Supplies" }).first();
+
+  await loginAs(page, "MANAGER");
+  await openProject(page, PROJECT, "Budget & spend");
+  await row().getByRole("button", { name: "Approve" }).click();
+  await row().locator('input[name="confirm"]').check();
+  await row().getByRole("button", { name: "Confirm" }).click();
+  await expect(row().getByText("Waiting for the owner's confirmation")).toBeVisible();
+
+  await loginAs(page, "FINANCE");
+  await page.goto("/approvals");
+  await row().getByRole("button", { name: "Approve" }).click();
+  await row().locator('input[name="confirm"]').check();
+  await row().getByRole("button", { name: "Confirm" }).click();
+  await openProject(page, PROJECT, "Budget & spend");
+  await expect(row().getByText("Confirmed by Fiona Reyes, for the owner")).toBeVisible();
+
+  // Turn it back off.
+  await loginAs(page, "OWNER");
+  await page.goto("/settings");
+  await page.locator('input[name="delegateRoles"][value="FINANCE"]').uncheck();
+  await page.getByRole("button", { name: "Save approvals" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
 });

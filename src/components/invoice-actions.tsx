@@ -8,8 +8,8 @@ type Action = (s: State, f: FormData) => Promise<State>;
 export type InvoiceOption = "approve" | "reject" | "process" | "pay" | "rejectPayment";
 
 /** Buttons for whichever invoice or payment steps this user can take right now. */
-export function InvoiceActions({ decide, pay, options, balance }: { decide: Action; pay: Action; options: InvoiceOption[]; balance: string }) {
-  const [mode, setMode] = useState<null | "reject" | "pay" | "rejectPayment">(null);
+export function InvoiceActions({ decide, pay, options, balance, purpose }: { decide: Action; pay: Action; options: InvoiceOption[]; balance: string; purpose: string }) {
+  const [mode, setMode] = useState<null | "approve" | "reject" | "pay" | "rejectPayment">(null);
   // Close the open form once the server accepts it.
   const closeOnSuccess = (run: Action): Action => async (s, f) => {
     const result = await run(s, f);
@@ -22,6 +22,24 @@ export function InvoiceActions({ decide, pay, options, balance }: { decide: Acti
   const error = dState?.error ?? pState?.error;
   const pending = dPending || pPending;
 
+  if (mode === "approve") {
+    return (
+      <form action={decideAction} className="mt-2 space-y-2 text-left">
+        <input type="hidden" name="decision" value="approve" />
+        <label className="flex items-start gap-2 rounded-lg border border-line bg-bg p-2.5 text-xs">
+          <input type="checkbox" name="confirm" required className="mt-0.5 accent-[#ffc107]" />
+          <span>
+            I confirm this invoice is genuine and the money is for: <span className="font-medium">{purpose}</span>
+          </span>
+        </label>
+        <FormError message={dState?.error} />
+        <div className="flex gap-2">
+          <Button variant="success" disabled={pending} className="px-3 py-1 text-xs">Confirm</Button>
+          <Button type="button" variant="ghost" className="px-3 py-1 text-xs" onClick={() => setMode(null)}>Cancel</Button>
+        </div>
+      </form>
+    );
+  }
   if (mode === "reject") {
     return (
       <form action={decideAction} className="mt-2 space-y-2">
@@ -60,11 +78,7 @@ export function InvoiceActions({ decide, pay, options, balance }: { decide: Acti
 
   return (
     <div className="mt-2 flex flex-wrap justify-end gap-1">
-      {options.includes("approve") && (
-        <form action={decideAction}>
-          <Button name="decision" value="approve" variant="success" disabled={pending} className="px-3 py-1 text-xs">Approve</Button>
-        </form>
-      )}
+      {options.includes("approve") && <Button variant="success" className="px-3 py-1 text-xs" onClick={() => setMode("approve")}>Approve</Button>}
       {options.includes("reject") && <Button variant="danger" className="px-3 py-1 text-xs" onClick={() => setMode("reject")}>Reject</Button>}
       {options.includes("process") && (
         <form action={payAction}>

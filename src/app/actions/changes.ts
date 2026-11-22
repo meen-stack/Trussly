@@ -6,7 +6,9 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
 import { formatMoney, parseMoney } from "@/lib/money";
-import { canProposeChange, decideChange } from "@/lib/commercial";
+import { canDecideChange, canProposeChange, decideChange } from "@/lib/commercial";
+import { actsForOwner, ownerSideRoles } from "@/lib/release";
+import { addConfirmation, clearConfirmations } from "@/lib/confirmations";
 import { fingerprint } from "@/lib/signature";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import type { FormState } from "./auth";
@@ -68,38 +70,78 @@ export async function decideChangeOrder(projectId: string, changeId: string, _: 
   const project = await getProjectForUser(user, projectId);
   const co = await db.changeOrder.findFirst({ where: { id: changeId, projectId: project.id }, include: { budgetLine: true } });
   if (!co) return { error: "Change order not found." };
+  const company = user.company;
   const approve = form.get("decision") === "approve";
   const note = String(form.get("note") ?? "").trim() || null;
   const signedName = String(form.get("signature") ?? "").trim();
-  const result = decideChange(co.status, approve, user.role, co.amount, user.company.approvalThreshold);
-  if (!result.ok) return { error: result.error };
-  if (!approve && !note) return { error: "Say why it's rejected." };
-  if (approve && signedName.toLowerCase() !== user.name.toLowerCase()) return { error: `Type your full name (${user.name}) to sign.` };
+  const href = `/projects/${project.id}/changes`;
+  const money = formatMoney(co.amount, company.currency);
 
+  if (!approve) {
+    const ownerSide = actsForOwner(user.role, company);
+    let result = decideChange(co.status, false, user.role, co.amount, company.approvalThreshold);
+    if (!result.ok && ownerSide) result = decideChange(co.status, false, "OWNER", co.amount, company.approvalThreshold);
+    if (!result.ok) return { error: result.error };
+    if (!note) return { error: "Say why it's rejected." };
+    await db.changeOrder.update({ where: { id: co.id }, data: { status: "REJECTED", decidedById: user.id, decisionNote: note, decidedAt: new Date() } });
+    await clearConfirmations("CHANGE_ORDER", co.id);
+    await audit(user.id, `rejected change order CO-${co.number} (${money})`, "ChangeOrder", co.id, project.id, { note });
+    await notifyUsers([co.requestedById], { title: `Change order CO-${co.number} rejected`, body: note, href });
+    refresh(project.id);
+    return { success: "Rejected." };
+  }
+
+  if (co.status !== "PROPOSED") return { error: "This change order has already been decided." };
+  if (form.get("confirm") !== "on") return { error: "Tick the box to confirm the change and what the money is for." };
+  if (signedName.toLowerCase() !== user.name.toLowerCase()) return { error: `Type your full name (${user.name}) to sign.` };
+  const confirmed = await addConfirmation({
+    user,
+    projectId: project.id,
+    kind: "CHANGE_ORDER",
+    targetId: co.id,
+    amount: co.amount,
+    // Savings don't release money, so one approval is enough.
+    two: co.amount > 0 ? undefined : false,
+    requesterId: co.requestedById,
+    statement: `The change is needed and the money is for: ${co.reason}`,
+    singleOk: (role) => canDecideChange(role, co.amount, company.approvalThreshold),
+  });
+  if (!confirmed.ok) return { error: confirmed.error };
+  const role = confirmed.asOwner ? "OWNER" : user.role;
+  const behalf = confirmed.asOwner ? " on behalf of the owner" : "";
   const now = new Date();
+  const signature = db.signature.create({
+    data: { changeOrderId: co.id, userId: user.id, signedName, role, fingerprint: fingerprint([co.id, co.number, co.amount, co.title, user.id, signedName, now.toISOString()]), signedAt: now },
+  });
+
+  if (!confirmed.complete) {
+    await signature;
+    await audit(user.id, `confirmed and signed change order CO-${co.number} (${money})${behalf}`, "ChangeOrder", co.id, project.id, note ? { note } : undefined);
+    const next = role === "OWNER" ? (["MANAGER", "FINANCE"] as const) : ownerSideRoles(company);
+    await notifyProjectRoles(project.id, [...next], { title: `Second signature needed: CO-${co.number}`, body: `${user.name} signed ${co.title} (${money}). One more person must sign before it's approved.`, href }, user.id);
+    refresh(project.id);
+    return { success: "Signed. One more person must sign." };
+  }
+
   await db.$transaction([
-    db.changeOrder.update({ where: { id: co.id }, data: { status: result.next, decidedById: user.id, decisionNote: note, decidedAt: now } }),
-    ...(approve
-      ? [
-          db.budgetLine.update({ where: { id: co.budgetLineId }, data: { budgeted: { increment: co.amount } } }),
-          ...(co.milestoneId ? [db.milestone.update({ where: { id: co.milestoneId }, data: { paymentAmount: { increment: co.amount } } })] : []),
-          ...(co.daysImpact ? [db.project.update({ where: { id: project.id }, data: { endDate: new Date(project.endDate.getTime() + co.daysImpact * DAY) } })] : []),
-          db.signature.create({
-            data: { changeOrderId: co.id, userId: user.id, signedName, role: user.role, fingerprint: fingerprint([co.id, co.number, co.amount, co.title, user.id, signedName, now.toISOString()]), signedAt: now },
-          }),
-        ]
-      : []),
+    db.changeOrder.update({ where: { id: co.id }, data: { status: "APPROVED", decidedById: user.id, decisionNote: note, decidedAt: now } }),
+    db.budgetLine.update({ where: { id: co.budgetLineId }, data: { budgeted: { increment: co.amount } } }),
+    ...(co.milestoneId ? [db.milestone.update({ where: { id: co.milestoneId }, data: { paymentAmount: { increment: co.amount } } })] : []),
+    ...(co.daysImpact ? [db.project.update({ where: { id: project.id }, data: { endDate: new Date(project.endDate.getTime() + co.daysImpact * DAY) } })] : []),
+    signature,
   ]);
-  const money = formatMoney(co.amount, user.company.currency);
-  await audit(user.id, `${approve ? "approved and signed" : "rejected"} change order CO-${co.number} (${money})`, "ChangeOrder", co.id, project.id, {
+  await audit(user.id, `approved and signed change order CO-${co.number} (${money})${behalf}`, "ChangeOrder", co.id, project.id, {
     ...(note && { note }),
-    ...(approve && { budgetLine: co.budgetLine.category, from: co.budgetLine.budgeted, to: co.budgetLine.budgeted + co.amount, days: co.daysImpact }),
+    budgetLine: co.budgetLine.category,
+    from: co.budgetLine.budgeted,
+    to: co.budgetLine.budgeted + co.amount,
+    days: co.daysImpact,
   });
   await notifyUsers([co.requestedById], {
-    title: `Change order CO-${co.number} ${approve ? "approved" : "rejected"}`,
-    body: approve ? `${co.title}: ${money} added to ${co.budgetLine.category}${co.daysImpact ? `, ${co.daysImpact} days on the schedule` : ""}.` : (note ?? ""),
-    href: `/projects/${project.id}/changes`,
+    title: `Change order CO-${co.number} approved`,
+    body: `${co.title}: ${money} added to ${co.budgetLine.category}${co.daysImpact ? `, ${co.daysImpact} days on the schedule` : ""}.`,
+    href,
   });
   refresh(project.id);
-  return { success: approve ? "Approved and signed." : "Rejected." };
+  return { success: "Approved and signed." };
 }

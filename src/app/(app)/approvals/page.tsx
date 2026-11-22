@@ -79,7 +79,7 @@ export default async function ApprovalsPage() {
         {expenses.length > 0 && (
           <Card>
             <CardHeader title={user.role === "FINANCE" || user.role === "ADMIN" ? "Invoices to pay" : "Invoices to approve"} />
-            <InvoiceTable rows={expenses} role={user.role} currency={currency} threshold={user.company.approvalThreshold} showProject />
+            <InvoiceTable rows={expenses} user={user} showProject />
           </Card>
         )}
         {milestones.length > 0 && (

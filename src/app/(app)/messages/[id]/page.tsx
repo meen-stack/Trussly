@@ -11,6 +11,7 @@ import { Button, Card, cn } from "@/components/ui";
 import { ChatComposer, LiveRefresh, ScrollToEnd } from "@/components/chat";
 import { addToGroup, leaveGroup, sendMessage } from "@/app/actions/messages";
 import { ChatList } from "../chat-list";
+import { chatScope } from "@/lib/scope";
 
 export const metadata: Metadata = { title: "Messages" };
 
@@ -19,11 +20,7 @@ export default async function ChatPage({ params }: PageProps<"/messages/[id]">) 
   const user = await requireUser();
   await ensureDefaultChats(user);
   const chat = await db.conversation.findFirst({
-    where: {
-      id,
-      companyId: user.companyId,
-      members: { some: { userId: user.id } },
-    },
+    where: { id, ...chatScope(user) },
     include: {
       project: { select: { id: true, name: true } },
       members: {

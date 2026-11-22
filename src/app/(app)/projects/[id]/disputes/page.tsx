@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { format } from "date-fns";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
+import { disputeScope } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
@@ -26,7 +27,7 @@ export default async function DisputesPage({ params }: PageProps<"/projects/[id]
   const currency = user.company.currency;
   const [disputes, work, invoices] = await Promise.all([
     db.dispute.findMany({
-      where: { projectId: project.id },
+      where: { projectId: project.id, ...disputeScope(user) },
       include: {
         raisedBy: true,
         resolvedBy: true,

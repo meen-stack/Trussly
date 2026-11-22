@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
+import { invoiceScope } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
@@ -34,7 +35,7 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
     orderBy: { category: "asc" },
   });
   const expenses = await db.expense.findMany({
-    where: { budgetLine: { projectId: project.id } },
+    where: { budgetLine: { projectId: project.id }, ...invoiceScope(user) },
     include: invoiceInclude,
     orderBy: { createdAt: "desc" },
   });

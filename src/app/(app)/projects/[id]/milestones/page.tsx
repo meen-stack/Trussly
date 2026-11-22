@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Check, User } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
+import { invoiceScope } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
@@ -45,6 +46,7 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
         ratings: true,
         assignee: { select: { name: true, title: true } },
         invoices: {
+          where: invoiceScope(user),
           include: { payments: true },
           orderBy: { createdAt: "asc" },
         },

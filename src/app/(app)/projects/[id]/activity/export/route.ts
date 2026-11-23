@@ -1,8 +1,8 @@
 import { requireUser } from "@/lib/auth";
-import { getProjectForUser } from "@/lib/access";
+import { auditWhereFor, getProjectForUser } from "@/lib/access";
 import { db } from "@/lib/db";
 import { ROLE_LABEL } from "@/lib/permissions";
-import { AUDIT_TYPES, auditWhere, toCsv } from "@/lib/audit-query";
+import { AUDIT_TYPES, toCsv } from "@/lib/audit-query";
 
 /** The filtered audit trail as a CSV download. */
 export async function GET(req: Request, { params }: RouteContext<"/projects/[id]/activity/export">) {
@@ -11,7 +11,7 @@ export async function GET(req: Request, { params }: RouteContext<"/projects/[id]
   const project = await getProjectForUser(user, id);
   const sp = new URL(req.url).searchParams;
   const events = await db.auditEvent.findMany({
-    where: auditWhere(project.id, Object.fromEntries(sp)),
+    where: await auditWhereFor(user, project.id, Object.fromEntries(sp)),
     include: { actor: true },
     orderBy: { createdAt: "asc" },
   });

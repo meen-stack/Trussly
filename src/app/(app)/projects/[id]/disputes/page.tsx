@@ -6,7 +6,7 @@ import { disputeScope } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
-import { disputeAction } from "@/lib/commercial";
+import { disputeAction, reopenAfterDispute } from "@/lib/commercial";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { ButtonsForm } from "@/components/decision-form";
@@ -66,7 +66,10 @@ export default async function DisputesPage({ params }: PageProps<"/projects/[id]
         {disputes.map((d) => {
           const [label, tone] = STATUS[d.status];
           const canEscalate = disputeAction(d.status, "escalate", user.role).ok;
-          const canResolve = disputeAction(d.status, "resolve", user.role).ok;
+          const decidedByMe = (d.milestone?.decidedById ?? d.expense?.decidedById) === user.id;
+          const canResolve = disputeAction(d.status, "resolve", user.role, decidedByMe).ok;
+          const ownDecision = decidedByMe && !canResolve && disputeAction(d.status, "resolve", user.role).ok;
+          const reopen = reopenAfterDispute({ work: d.milestone, invoice: d.expense });
           return (
             <Card key={d.id} className="p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -106,6 +109,13 @@ export default async function DisputesPage({ params }: PageProps<"/projects/[id]
                 <ButtonsForm action={replyDispute.bind(null, project.id, d.id)}>
                   <Textarea name="body" rows={2} placeholder={canResolve ? "Reply, or write the resolution" : "Reply"} />
                   <MediaPicker name="media" folder={`projects/${project.id}`} direct={directUploads} label="Add photos or videos" />
+                  {canResolve && reopen && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" name="reopen" className="accent-[#ffc107]" />
+                      {reopen.kind === "work" ? "Reopen the work so the contractor can fix and resubmit it" : reopen.next === "SUBMITTED" ? "Send the invoice back for review" : "Send the invoice back to finance for payment"}
+                    </label>
+                  )}
+                  {ownDecision && <p className="text-xs text-muted">You made the decision being disputed, so the owner settles it. Escalate it when you&apos;re ready.</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button name="action" value="reply" variant="secondary">
                       Reply

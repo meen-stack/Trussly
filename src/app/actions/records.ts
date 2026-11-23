@@ -9,7 +9,8 @@ import { getProjectForUser } from "@/lib/access";
 import { canDisputeWork, disputeScope, invoiceScope } from "@/lib/scope";
 import { ROLE_LABEL, can } from "@/lib/permissions";
 import { formatMoney, parseMoney } from "@/lib/money";
-import { disputeAction, fullySigned, missingSigners, nextVersion, validScore } from "@/lib/commercial";
+import { disputeAction, fullySigned, missingSigners, nextVersion, reopenAfterDispute, validScore } from "@/lib/commercial";
+import { clearConfirmations } from "@/lib/confirmations";
 import { fingerprint } from "@/lib/signature";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { filesFrom, mediaFrom, storeFile } from "@/lib/storage";
@@ -143,7 +144,10 @@ export async function raiseDispute(projectId: string, _: FormState, form: FormDa
 export async function replyDispute(projectId: string, disputeId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
   const project = await getProjectForUser(user, projectId);
-  const d = await db.dispute.findFirst({ where: { id: disputeId, projectId: project.id, ...disputeScope(user) }, include: { messages: { select: { authorId: true } } } });
+  const d = await db.dispute.findFirst({
+    where: { id: disputeId, projectId: project.id, ...disputeScope(user) },
+    include: { messages: { select: { authorId: true } }, milestone: true, expense: true },
+  });
   if (!d) return { error: "Dispute not found." };
   const body = String(form.get("body") ?? "").trim();
   let attachments: string[];
@@ -161,16 +165,26 @@ export async function replyDispute(projectId: string, disputeId: string, _: Form
     refresh(project.id);
     return { success: "Sent." };
   }
-  const step = disputeAction(d.status, action === "escalate" ? "escalate" : "resolve", user.role);
+  const decidedByMe = (d.milestone?.decidedById ?? d.expense?.decidedById) === user.id;
+  const step = disputeAction(d.status, action === "escalate" ? "escalate" : "resolve", user.role, decidedByMe);
   if (!step.ok) return { error: step.error };
   if (step.next === "RESOLVED" && body.length < 5) return { error: "Write the resolution." };
+  // Settling in the contractor's favour can reopen the rejected work or invoice.
+  const reopen = step.next === "RESOLVED" && form.get("reopen") === "on" ? reopenAfterDispute({ work: d.milestone, invoice: d.expense }) : null;
   await db.$transaction([
+    ...(reopen?.kind === "work" ? [db.milestone.update({ where: { id: d.milestone!.id }, data: { status: reopen.next, reviewNote: `Reopened by dispute: ${body}` } })] : []),
+    ...(reopen?.kind === "invoice" ? [db.expense.update({ where: { id: d.expense!.id }, data: { status: reopen.next, reviewNote: `Reopened by dispute: ${body}`, decidedAt: null } })] : []),
     db.dispute.update({ where: { id: d.id }, data: step.next === "RESOLVED" ? { status: "RESOLVED", resolution: body, resolvedById: user.id, resolvedAt: new Date() } : { status: "ESCALATED" } }),
     ...(body || attachments.length
       ? [db.disputeMessage.create({ data: { disputeId: d.id, authorId: user.id, attachments, body: step.next === "RESOLVED" ? `Resolved: ${body}` : `Escalated to the owner. ${body}`.trim() } })]
       : []),
   ]);
+  if (reopen?.kind === "invoice" && reopen.next === "SUBMITTED") await clearConfirmations("INVOICE", d.expense!.id);
   await audit(user.id, `${step.next === "RESOLVED" ? "resolved" : "escalated"} the dispute "${d.title}"`, "Dispute", d.id, project.id, body ? { note: body } : undefined);
+  if (reopen?.kind === "work") await audit(user.id, `reopened "${d.milestone!.title}" for corrections after a dispute`, "Milestone", d.milestone!.id, project.id, { from: "REJECTED", to: reopen.next, note: body });
+  if (reopen?.kind === "invoice") {
+    await audit(user.id, `reopened the ${formatMoney(d.expense!.amount, user.company.currency)} invoice from ${d.expense!.vendor} after a dispute`, "Expense", d.expense!.id, project.id, { from: d.expense!.status, to: reopen.next, note: body });
+  }
   const href = `/projects/${project.id}/disputes`;
   if (step.next === "ESCALATED") await notifyProjectRoles(project.id, ["OWNER"], { title: `Dispute escalated: ${d.title}`, body: `${user.name} needs your decision on ${project.name}.`, href });
   else await notifyUsers([d.raisedById, ...d.messages.map((m) => m.authorId)].filter((id) => id !== user.id), { title: `Dispute resolved: ${d.title}`, body, href });

@@ -37,7 +37,7 @@ export default async function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {summaries.map((s) => (
-            <ProjectCard key={s.project.id} s={s} currency={user.company.currency} />
+            <ProjectCard key={s.project.id} s={s} currency={user.company.currency} finances={can.seeProjectFinances(user.role)} />
           ))}
         </div>
       )}

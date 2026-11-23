@@ -3,7 +3,8 @@ import { SignJWT, jwtVerify } from "jose";
 export const SESSION_COOKIE = "trussly_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-export type SessionPayload = { userId: string; companyId: string; role: string };
+/** `v` is the user's session version; changing the password bumps it, which ends every older session. */
+export type SessionPayload = { userId: string; companyId: string; role: string; v?: number };
 
 function key() {
   const secret = process.env.AUTH_SECRET;

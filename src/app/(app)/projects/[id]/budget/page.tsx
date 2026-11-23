@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { summarizeBudget } from "@/lib/budget";
 import { canReleaseRetention, forecastLine, openOrderValue, originalBudget, poTotal, retentionHeld } from "@/lib/commercial";
 import { balanceOf, paidOf } from "@/lib/status";
+import { invoiceRoom } from "@/lib/workflow";
 import { Badge, Button, Card, CardHeader, Field, Input, Progress, Select, Stat } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
 import { InvoiceTable, invoiceInclude } from "@/components/invoice-table";
@@ -86,6 +87,12 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   const forecastTotal = [...forecasts.values()].reduce((s, f) => s + f.forecast, 0);
   const originalTotal = [...forecasts.values()].reduce((s, f) => s + f.original, 0);
   const manage = can.manageProject(user.role);
+  // Contractors and supervisors see their own invoices, not the project's budget.
+  const finances = can.seeProjectFinances(user.role);
+  const submitted = expenses.filter((e) => e.status !== "REJECTED").reduce((s, e) => s + e.amount, 0);
+  // What's left to invoice on each work item, so instalments can't add up to more than the work is worth.
+  const claims = await db.expense.findMany({ where: { milestoneId: { in: work.map((m) => m.id) } }, select: { milestoneId: true, amount: true, status: true } });
+  const roomOf = (m: { id: string; paymentAmount: number }) => invoiceRoom(m.paymentAmount, claims.filter((c) => c.milestoneId === m.id));
   const held = retentionHeld(expenses);
   const heldTotal = held.reduce((s, e) => s + e.retention, 0);
   const released = expenses.filter((e) => e.retentionReleasedAt).reduce((s, e) => s + e.retention, 0);
@@ -100,6 +107,14 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
   });
   return (
     <div className="space-y-6">
+      {!finances && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <Stat label="Your invoices" value={formatMoney(submitted, currency)} sub={`${expenses.length} submitted`} />
+          <Stat label="Paid to you" value={formatMoney(paid, currency)} />
+          <Stat label="Approved, not yet paid" value={formatMoney(owed, currency)} />
+        </div>
+      )}
+      {finances && (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           label="Revised budget"
@@ -120,6 +135,7 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
           tone={forecastTotal > b.budgeted ? "bad" : "ok"}
         />
       </div>
+      )}
 
       {(heldTotal > 0 || released > 0) && (
         <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -158,6 +174,7 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
+        {finances && (
         <Card className="lg:col-span-2">
           <CardHeader title="Budget lines" />
           <div className="divide-y divide-line">
@@ -213,6 +230,7 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
             </div>
           )}
         </Card>
+        )}
 
         {can.submitExpense(user.role) && (
           <Card className="self-start">
@@ -240,11 +258,18 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
                   <Field label="For work">
                     <Select name="milestoneId" defaultValue="">
                       <option value="">Not tied to work (materials, plant hire…)</option>
-                      {work.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.title}
-                        </option>
-                      ))}
+                      {work.map((m) => {
+                        const room = roomOf(m);
+                        const capped = m.paymentAmount > 0;
+                        // Only show amounts on work this person may see the value of.
+                        const shown = capped && (finances || m.assigneeId === user.id);
+                        return (
+                          <option key={m.id} value={m.id} disabled={capped && room === 0}>
+                            {m.title}
+                            {capped && room === 0 ? " (invoiced in full)" : shown ? ` (${formatMoney(room, currency)} left to invoice)` : ""}
+                          </option>
+                        );
+                      })}
                     </Select>
                   </Field>
                   <Field label="Vendor">
@@ -256,8 +281,8 @@ export default async function BudgetPage({ params }: PageProps<"/projects/[id]/b
                   <Field label={`Amount (${currency})`}>
                     <Input name="amount" inputMode="decimal" placeholder="18500" required />
                   </Field>
-                  <Field label="Invoice">
-                    <Input name="invoice" type="file" accept="image/*,application/pdf" />
+                  <Field label="Invoice or receipt">
+                    <Input name="invoice" type="file" accept="image/*,application/pdf" required />
                   </Field>
                 </ActionForm>
               </div>

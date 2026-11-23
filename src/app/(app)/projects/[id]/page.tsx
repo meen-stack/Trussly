@@ -10,6 +10,7 @@ import { Badge, Card, CardHeader, EmptyState, Stat } from "@/components/ui";
 import { WorkBadge } from "@/components/status";
 import { BudgetChart, ProgressChart, SpendChart } from "@/components/charts";
 import { Media } from "@/components/media";
+import { can } from "@/lib/permissions";
 
 export default async function ProjectOverview({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
@@ -18,6 +19,8 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
   const s = await loadProjectSummary(id);
   const currency = user.company.currency;
   const h = health(s);
+  // Contractors and supervisors don't see the project's budget, spend or forecast.
+  const finances = can.seeProjectFinances(user.role);
   const photos = await db.photo.findMany({
     where: {
       OR: [{ report: { projectId: id } }, { milestone: { projectId: id } }],
@@ -30,7 +33,7 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className={finances ? "grid grid-cols-2 gap-3 lg:grid-cols-4" : "grid grid-cols-2 gap-3"}>
         <Stat label="Health" value={<Badge tone={h.tone}>{h.label}</Badge>} sub={s.behindBy > 0 ? `${s.behindBy} pts behind plan` : "At or ahead of plan"} />
         <Stat
           label="Progress"
@@ -38,6 +41,8 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
           sub={`${s.planned}% planned by today`}
           tone={s.behindBy > 15 ? "bad" : s.behindBy > 5 ? "warn" : undefined}
         />
+        {finances && (
+        <>
         <Stat
           label="Spent"
           value={formatMoney(s.budget.spent, currency, true)}
@@ -54,6 +59,8 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
           }
           tone={s.forecast && s.forecast > s.budget.budgeted * 1.1 ? "bad" : s.forecast && s.forecast > s.budget.budgeted ? "warn" : undefined}
         />
+        </>
+        )}
       </div>
 
       {!reportedToday && s.project.status === "ACTIVE" && (
@@ -66,20 +73,23 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={finances ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"}>
         <Card>
           <CardHeader title="Progress vs plan" />
           <div className="p-4">{s.progressSeries.length > 1 ? <ProgressChart data={s.progressSeries} /> : <EmptyState title="Not enough reports yet" />}</div>
         </Card>
+        {finances && (
         <Card>
           <CardHeader title="Approved spend over time" subtitle={`Budget ${formatMoney(s.budget.budgeted, currency)}`} />
           <div className="p-4">
             <SpendChart data={s.spendSeries} budget={s.budget.budgeted / 100} currency={currency} />
           </div>
         </Card>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
+        {finances && (
         <Card className="lg:col-span-2">
           <CardHeader
             title="Budget vs actual by line"
@@ -100,7 +110,8 @@ export default async function ProjectOverview({ params }: PageProps<"/projects/[
             />
           </div>
         </Card>
-        <div className="space-y-6">
+        )}
+        <div className={finances ? "space-y-6" : "grid gap-6 sm:grid-cols-2 lg:col-span-3"}>
           <Card>
             <CardHeader title="Work" subtitle={`${s.signedOff} of ${s.project.milestones.length} verified`} />
             <div className="p-5 text-sm">

@@ -4,7 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { visibleProjectsWhere } from "@/lib/access";
+import { auditScopeFor, visibleProjectsWhere } from "@/lib/access";
 import { loadProjectSummary, health } from "@/lib/project-data";
 import { approvalCount } from "@/lib/queues";
 import { can } from "@/lib/permissions";
@@ -30,7 +30,7 @@ export default async function DashboardPage() {
   const summaries = await Promise.all(projects.map((p) => loadProjectSummary(p.id)));
   const pending = await approvalCount(user);
   const activity = await db.auditEvent.findMany({
-    where: { project: visibleProjectsWhere(user) },
+    where: { AND: [{ project: visibleProjectsWhere(user) }, await auditScopeFor(user)] },
     include: { actor: true, project: { select: { name: true, id: true } } },
     orderBy: { createdAt: "desc" },
     take: 8,
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
             <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
               {summaries.map((s) => (
-                <ProjectCard key={s.project.id} s={s} currency={currency} />
+                <ProjectCard key={s.project.id} s={s} currency={currency} finances={can.seeProjectFinances(user.role)} />
               ))}
             </div>
             <Card className="self-start">

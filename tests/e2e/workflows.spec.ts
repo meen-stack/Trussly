@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loginAs, openProject, PHOTO, VIDEO } from "./helpers";
+import { loginAs, openProject, PHOTO, pickOption, VIDEO } from "./helpers";
 
 const PROJECT = "Harbour View Residences";
 
@@ -71,10 +71,11 @@ test("invoices: unverified work can't be approved", async ({ page }) => {
   await openProject(page, PROJECT, "Budget & spend");
   await page.locator("summary", { hasText: "Submit an invoice" }).click();
   await page.locator('select[name="budgetLineId"]').selectOption({ label: "Structure" });
-  await page.locator('select[name="milestoneId"]').selectOption({ label: "Level 2 slab poured" });
+  await pickOption(page, "milestoneId", "Level 2 slab poured");
   await page.locator('input[name="vendor"]').fill("E2E Slab Claim");
   await page.locator('input[name="description"]').fill("Slab progress claim");
   await page.locator('input[name="amount"]').fill("5000");
+  await page.locator('input[name="invoice"]').setInputFiles(PHOTO);
   await page.getByRole("button", { name: "Submit invoice" }).click();
   await expect(page.getByText("It can be approved once the work is verified.")).toBeVisible();
 
@@ -93,6 +94,7 @@ test("payments: manager and owner approve, finance pays in two parts", async ({ 
   await page.locator('input[name="vendor"]').fill("E2E Roofing Supplies");
   await page.locator('input[name="description"]').fill("Roof membrane");
   await page.locator('input[name="amount"]').fill("15000");
+  await page.locator('input[name="invoice"]').setInputFiles(PHOTO);
   await page.getByRole("button", { name: "Submit invoice" }).click();
   await expect(page.getByText("Invoice submitted for approval.")).toBeVisible();
 
@@ -208,6 +210,7 @@ test("delegation: the owner lets the accountant sign in their place", async ({ p
   await page.locator('input[name="vendor"]').fill("E2E Delegated Supplies");
   await page.locator('input[name="description"]').fill("Flashing");
   await page.locator('input[name="amount"]').fill("1200");
+  await page.locator('input[name="invoice"]').setInputFiles(PHOTO);
   await page.getByRole("button", { name: "Submit invoice" }).click();
   const row = () => page.locator("li", { hasText: "E2E Delegated Supplies" }).first();
 

@@ -14,9 +14,12 @@ export function visibleProjectsWhere(user: Viewer): Prisma.ProjectWhereInput {
     : { companyId: user.companyId, members: { some: { userId: user.id } } };
 }
 
-/** Invoices a user can see on a project they can see. Contractors only see their own. */
+/**
+ * Invoices a user can see on a project they can see. People who don't see the project's
+ * finances (contractors and supervisors) only see invoices they submitted.
+ */
 export function invoiceScope(user: Viewer): Prisma.ExpenseWhereInput {
-  return user.role === "CONTRACTOR" ? { submitterId: user.id } : {};
+  return can.seeProjectFinances(user.role) ? {} : { submitterId: user.id };
 }
 
 /**
@@ -24,6 +27,8 @@ export function invoiceScope(user: Viewer): Prisma.ExpenseWhereInput {
  * they raised or wrote in, or that are about their own work or invoices.
  */
 export function disputeScope(user: Viewer): Prisma.DisputeWhereInput {
+  // Supervisors handle disputes about work on site, but not about other people's invoices.
+  if (user.role === "SUPERVISOR") return { OR: [{ expenseId: null }, { raisedById: user.id }, { expense: { submitterId: user.id } }] };
   if (user.role !== "CONTRACTOR") return {};
   return {
     OR: [
@@ -50,4 +55,26 @@ export function chatScope(user: Viewer): Prisma.ConversationWhereInput {
 /** Contractors can only raise disputes about work assigned to them. */
 export function canDisputeWork(user: Viewer, work: { assigneeId: string | null }) {
   return user.role !== "CONTRACTOR" || work.assigneeId === user.id;
+}
+
+/** Audit trail record types with no money in them, which supervisors see for the whole project. */
+export const SITE_AUDIT_TYPES = ["Milestone", "DailyReport", "Material", "Document"];
+
+/**
+ * Audit trail events a user can see on a project they can see. The commercial side sees everything.
+ * Supervisors see site records and their own actions. Contractors see their own actions and what
+ * happened to their own work, invoices and disputes, so they never see anyone else's money.
+ */
+export function auditScope(user: Viewer, mine: { work: string[]; invoices: string[]; disputes: string[] } = { work: [], invoices: [], disputes: [] }): Prisma.AuditEventWhereInput {
+  if (can.seeProjectFinances(user.role)) return {};
+  if (user.role === "SUPERVISOR") return { OR: [{ actorId: user.id }, { entityType: { in: SITE_AUDIT_TYPES } }] };
+  return {
+    OR: [
+      { actorId: user.id },
+      { entityType: "Milestone", entityId: { in: mine.work } },
+      { entityType: "Expense", entityId: { in: mine.invoices } },
+      { entityType: "Dispute", entityId: { in: mine.disputes } },
+      { entityType: "Document" },
+    ],
+  };
 }

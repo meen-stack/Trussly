@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
-import { NEEDS_NOTE, nextWorkStatus, type WorkAction } from "@/lib/workflow";
+import { NEEDS_NOTE, nextWorkStatus, separationError, type WorkAction } from "@/lib/workflow";
 import { audit, notifyProjectRoles, notifyUsers } from "@/lib/notify";
 import { formatMoney } from "@/lib/money";
 import { mediaFrom } from "@/lib/storage";
@@ -35,6 +35,8 @@ export async function transitionWork(projectId: string, milestoneId: string, _: 
   const onBehalf = work.status === "AWAITING_OWNER" && actsForOwner(user.role, user.company);
   const result = nextWorkStatus(work.status, action, onBehalf ? "OWNER" : user.role, work.paymentAmount, user.company.approvalThreshold);
   if (!result.ok) return { error: result.error };
+  const conflict = separationError(work.status, action, user.id, work);
+  if (conflict) return { error: conflict };
   if (NEEDS_NOTE.includes(action) && !note) return { error: "Say what needs fixing so the contractor knows." };
 
   let urls: string[] = [];
@@ -48,20 +50,38 @@ export async function transitionWork(projectId: string, milestoneId: string, _: 
   }
 
   const now = new Date();
-  await db.milestone.update({
-    where: { id: work.id },
+  const decision = action !== "start" && action !== "submit";
+  // Only move the work if nobody else moved it first, so a double tap or two people at once can't skip a step.
+  const moved = await db.milestone.updateMany({
+    where: { id: work.id, status: work.status },
     data: {
       status: result.next,
+      ...(decision && { decidedById: user.id }),
       ...(action === "start" && { startedAt: now }),
-      ...(action === "submit" && { submittedNote: note, submittedAt: now, inspectNote: null, reviewNote: null, startedAt: work.startedAt ?? now }),
-      ...((action === "pass" || action === "fail") && { inspectNote: note, inspectedAt: now }),
-      ...(action === "approve" && { reviewNote: note, approvedAt: now, ...(result.next === "VERIFIED" && { verifiedAt: now }) }),
+      ...(action === "submit" && {
+        submittedNote: note,
+        submittedAt: now,
+        submittedById: user.id,
+        inspectedById: null,
+        approvedById: null,
+        inspectNote: null,
+        reviewNote: null,
+        startedAt: work.startedAt ?? now,
+      }),
+      ...((action === "pass" || action === "fail") && { inspectNote: note, inspectedAt: now, inspectedById: user.id }),
+      ...(action === "approve" && { reviewNote: note, approvedAt: now, approvedById: user.id, ...(result.next === "VERIFIED" && { verifiedAt: now }) }),
       ...(action === "finalApprove" && { verifiedAt: now, ...(note && { reviewNote: note }) }),
       ...((action === "return" || action === "reject") && { reviewNote: note }),
-      ...(urls.length && { photos: { create: urls.map((url) => ({ url, caption: note })) } }),
     },
   });
-  await audit(user.id, `${VERB[action]} "${work.title}"${onBehalf ? " on behalf of the owner" : ""}`, "Milestone", work.id, project.id, note ? { note } : undefined);
+  if (moved.count === 0) return { error: "Someone else updated this work just now. Refresh to see where it is." };
+  if (urls.length) await db.photo.createMany({ data: urls.map((url) => ({ url, caption: note, milestoneId: work.id })) });
+  await audit(user.id, `${VERB[action]} "${work.title}"${onBehalf ? " on behalf of the owner" : ""}`, "Milestone", work.id, project.id, {
+    from: work.status,
+    to: result.next,
+    ...(note && { note }),
+    ...(urls.length && { evidence: urls.length }),
+  });
 
   const href = `/projects/${project.id}/milestones`;
   const contractor = work.assigneeId ? [work.assigneeId] : [];

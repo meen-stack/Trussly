@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import { format } from "date-fns";
 import { Download } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { getProjectForUser } from "@/lib/access";
+import { auditWhereFor, getProjectForUser } from "@/lib/access";
 import { db } from "@/lib/db";
 import { ROLE_LABEL } from "@/lib/permissions";
-import { AUDIT_TYPES, auditWhere, type AuditFilter } from "@/lib/audit-query";
+import { AUDIT_TYPES, type AuditFilter } from "@/lib/audit-query";
 import { Badge, Button, ButtonLink, Card, CardHeader, EmptyState, Input, Select } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Audit trail" };
@@ -22,18 +22,20 @@ export default async function ActivityPage({ params, searchParams }: PageProps<"
   };
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
+  const where = await auditWhereFor(user, project.id, f);
+  const everyone = await auditWhereFor(user, project.id, {});
   const [events, people, count] = await Promise.all([
     db.auditEvent.findMany({
-      where: auditWhere(project.id, f),
+      where,
       include: { actor: true },
       orderBy: { createdAt: "desc" },
       take: 300,
     }),
     db.user.findMany({
-      where: { auditEvents: { some: { projectId: project.id } } },
+      where: { auditEvents: { some: everyone } },
       orderBy: { name: "asc" },
     }),
-    db.auditEvent.count({ where: auditWhere(project.id, f) }),
+    db.auditEvent.count({ where }),
   ]);
   const qs = new URLSearchParams(Object.entries(f).filter((e): e is [string, string] => !!e[1])).toString();
   const filtered = qs.length > 0;

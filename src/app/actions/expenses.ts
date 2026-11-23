@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
 import { can } from "@/lib/permissions";
 import { formatMoney, parseMoney } from "@/lib/money";
-import { applyPayment, nextInvoiceStatus, payable, retentionFor, statusAfterRelease, type InvoiceAction } from "@/lib/workflow";
+import { applyPayment, invoiceRoom, nextInvoiceStatus, payable, retentionFor, statusAfterRelease, type InvoiceAction } from "@/lib/workflow";
 import { summarizeLine, WARN_AT } from "@/lib/budget";
 import { paidOf } from "@/lib/status";
 import { blocksPayment, canReleaseRetention, retentionHeld } from "@/lib/commercial";
@@ -49,18 +49,31 @@ export async function submitExpense(projectId: string, _: FormState, form: FormD
   if (parsed.data.milestoneId && !work) return { error: "Pick work on this project." };
   if (work && user.role === "CONTRACTOR" && work.assigneeId && work.assigneeId !== user.id) return { error: "You can only invoice for your own work." };
 
+  // Work can be invoiced in instalments, but never for more than it's worth.
+  if (work && work.paymentAmount > 0) {
+    const room = invoiceRoom(work.paymentAmount, await db.expense.findMany({ where: { milestoneId: work.id }, select: { amount: true, status: true } }));
+    if (amount > room) return { error: room === 0 ? "This work has already been invoiced in full." : `Only ${formatMoney(room, user.company.currency)} of this work is left to invoice.` };
+  }
+
+  // Every invoice needs its supporting document: the invoice itself, a receipt or a quote.
   const invoice = filesFrom(form, "invoice")[0];
-  let invoiceUrl: string | null = null;
-  if (invoice) {
-    try {
-      invoiceUrl = await storeFile(invoice, `projects/${project.id}/invoices`);
-    } catch (e) {
-      return { error: (e as Error).message };
-    }
+  if (!invoice) return { error: "Attach the invoice or receipt." };
+  let invoiceUrl: string;
+  try {
+    invoiceUrl = await storeFile(invoice, `projects/${project.id}/invoices`);
+  } catch (e) {
+    return { error: (e as Error).message };
   }
   // Retention is held on contractor invoices for work, and released at handover.
   const retention = work ? retentionFor(amount, user.company.retentionPercent) : 0;
-  const expense = await db.expense.create({
+  const expense = await db.$transaction(async (tx) => {
+    if (work && work.paymentAmount > 0) {
+      // Lock the work item and check again, so two invoices sent at once can't both fit.
+      await tx.$queryRaw`SELECT id FROM "Milestone" WHERE id = ${work.id} FOR UPDATE`;
+      const room = invoiceRoom(work.paymentAmount, await tx.expense.findMany({ where: { milestoneId: work.id }, select: { amount: true, status: true } }));
+      if (amount > room) return null;
+    }
+    return tx.expense.create({
     data: {
       budgetLineId: line.id,
       milestoneId: work?.id ?? null,
@@ -72,9 +85,11 @@ export async function submitExpense(projectId: string, _: FormState, form: FormD
       invoiceUrl,
       dueDate: new Date(Date.now() + user.company.paymentTermsDays * DAY),
     },
+    });
   });
+  if (!expense) return { error: "Another invoice for this work came in just now. Check what's left to invoice and try again." };
   const money = formatMoney(amount, user.company.currency);
-  await audit(user.id, `submitted a ${money} invoice${work ? ` for "${work.title}"` : ` for ${line.category}`}`, "Expense", expense.id, project.id);
+  await audit(user.id, `submitted a ${money} invoice${work ? ` for "${work.title}"` : ` for ${line.category}`}`, "Expense", expense.id, project.id, { amount, document: invoiceUrl });
   await notifyProjectRoles(
     project.id,
     ["MANAGER"],
@@ -131,10 +146,11 @@ export async function decideExpense(projectId: string, expenseId: string, _: For
     await clearConfirmations("INVOICE", expense.id);
   }
 
-  await db.expense.update({
-    where: { id: expense.id },
-    data: { status: result.next, reviewNote: note, decidedAt: result.next === "APPROVED" || result.next === "REJECTED" ? new Date() : null },
+  const moved = await db.expense.updateMany({
+    where: { id: expense.id, status: expense.status },
+    data: { status: result.next, reviewNote: note, decidedById: user.id, decidedAt: result.next === "APPROVED" || result.next === "REJECTED" ? new Date() : null },
   });
+  if (moved.count === 0) return { error: "Someone else decided this invoice just now. Refresh to see where it is." };
   const money = formatMoney(expense.amount, company.currency);
   const label = `${money} from ${expense.vendor}`;
   await audit(
@@ -143,7 +159,7 @@ export async function decideExpense(projectId: string, expenseId: string, _: For
     "Expense",
     expense.id,
     project.id,
-    note ? { note } : undefined,
+    { from: expense.status, to: result.next, amount: expense.amount, ...(note && { note }) },
   );
 
   const href = `/projects/${project.id}/budget`;
@@ -188,26 +204,34 @@ export async function payExpense(projectId: string, expenseId: string, _: FormSt
   const href = `/projects/${project.id}/budget`;
 
   if (action === "process") {
-    await db.expense.update({ where: { id: expense.id }, data: { status: "PROCESSING" } });
+    const moved = await db.expense.updateMany({ where: { id: expense.id, status: expense.status }, data: { status: "PROCESSING" } });
+    if (moved.count === 0) return { error: "This invoice changed just now. Refresh to see where it is." };
     await audit(user.id, `started processing ${money(expense.amount)} to ${expense.vendor}`, "Expense", expense.id, project.id);
     await notifyUsers([expense.submitterId], { title: `Payment processing: ${money(expense.amount)}`, body: `${expense.vendor}. Finance has scheduled your payment.`, href });
   } else if (action === "rejectPayment") {
     if (!note) return { error: "Say why the payment is refused." };
-    await db.expense.update({ where: { id: expense.id }, data: { status: "PAYMENT_REJECTED", reviewNote: note } });
+    const moved = await db.expense.updateMany({ where: { id: expense.id, status: expense.status }, data: { status: "PAYMENT_REJECTED", reviewNote: note } });
+    if (moved.count === 0) return { error: "This invoice changed just now. Refresh to see where it is." };
     await audit(user.id, `refused payment of ${money(expense.amount)} to ${expense.vendor}`, "Expense", expense.id, project.id, { note });
     await notifyUsers([expense.submitterId], { title: `Payment rejected: ${money(expense.amount)}`, body: note, href });
     await notifyProjectRoles(project.id, ["MANAGER"], { title: `Payment rejected: ${expense.vendor}`, body: note, href }, user.id);
   } else {
     const amount = parseMoney(String(form.get("amount") ?? ""));
-    const paid = applyPayment(expense, paidOf(expense), amount ?? 0);
-    if (!paid.ok) return { error: paid.error };
     const reference = String(form.get("reference") ?? "").trim() || null;
-    await db.$transaction([
-      db.payment.create({ data: { expenseId: expense.id, amount: amount!, reference, recordedById: user.id } }),
-      db.expense.update({ where: { id: expense.id }, data: { status: paid.next } }),
-    ]);
+    // Lock the invoice and work out the balance inside the transaction, so two payments at once can't overpay.
+    const paid = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Expense" WHERE id = ${expense.id} FOR UPDATE`;
+      const fresh = await tx.expense.findUniqueOrThrow({ where: { id: expense.id }, include: { payments: true } });
+      if (fresh.status !== "APPROVED" && fresh.status !== "PROCESSING") return { ok: false as const, error: "This invoice isn't ready for payment." };
+      const result = applyPayment(fresh, paidOf(fresh), amount ?? 0);
+      if (!result.ok) return result;
+      await tx.payment.create({ data: { expenseId: expense.id, amount: amount!, reference, recordedById: user.id } });
+      await tx.expense.update({ where: { id: expense.id }, data: { status: result.next } });
+      return result;
+    });
+    if (!paid.ok) return { error: paid.error };
     const full = paid.next === "PAID";
-    await audit(user.id, `paid ${money(amount!)} to ${expense.vendor}${full ? " (paid in full)" : ""}`, "Expense", expense.id, project.id, reference ? { reference } : undefined);
+    await audit(user.id, `paid ${money(amount!)} to ${expense.vendor}${full ? " (paid in full)" : ""}`, "Expense", expense.id, project.id, { amount: amount!, ...(reference && { reference }) });
     await notifyUsers([expense.submitterId], {
       title: `Payment ${full ? "confirmed" : "received"}: ${money(amount!)}`,
       body: `${expense.vendor}${reference ? `, ref ${reference}` : ""}. ${full ? "This invoice is fully paid." : `Balance remaining: ${money(payable(expense) - paidOf(expense) - amount!)}.`}`,

@@ -49,9 +49,28 @@ export function nextWorkStatus(current: MilestoneStatus, action: WorkAction, rol
   }
 }
 
-/** Actions this role can take on a work item right now. */
-export function workOptions(current: MilestoneStatus, role: Role, value: number, threshold: number) {
-  return WORK_ACTIONS.filter((a) => nextWorkStatus(current, a, role, value, threshold).ok);
+/** Who did each step so far. */
+export type WorkHands = { submittedById?: string | null; inspectedById?: string | null; approvedById?: string | null };
+
+/**
+ * Separation of duties: each check must be done by someone new. Whoever submitted work can't
+ * inspect or approve it, the inspector can't also approve it, and whoever approved it for the
+ * manager can't give the owner's final approval too (for example as the owner's delegate).
+ */
+export function separationError(current: MilestoneStatus, action: WorkAction, userId: string, hands: WorkHands): string | null {
+  const did = (id?: string | null) => !!id && id === userId;
+  if ((action === "pass" || action === "fail") && did(hands.submittedById)) return "You submitted this work, so someone else must inspect it.";
+  if (action === "approve" || action === "return" || action === "reject" || action === "finalApprove") {
+    if (did(hands.submittedById)) return "You submitted this work, so someone else must approve it.";
+    if (did(hands.inspectedById)) return "You inspected this work, so someone else must approve it.";
+    if (current === "AWAITING_OWNER" && did(hands.approvedById)) return "You approved this work for the manager, so the owner must give the final approval.";
+  }
+  return null;
+}
+
+/** Actions this person can take on a work item right now. */
+export function workOptions(current: MilestoneStatus, role: Role, value: number, threshold: number, userId?: string, hands: WorkHands = {}) {
+  return WORK_ACTIONS.filter((a) => nextWorkStatus(current, a, role, value, threshold).ok && (!userId || !separationError(current, a, userId, hands)));
 }
 
 /** Actions that must explain themselves. */
@@ -119,6 +138,18 @@ export function applyPayment(inv: Payable, paidSoFar: number, amount: number): R
   if (amount <= 0) return { ok: false, error: "Enter the amount paid." };
   if (amount > balance) return { ok: false, error: "That's more than the balance due." };
   return { ok: true, next: amount === balance ? "PAID" : "PROCESSING" };
+}
+
+/** Invoices that still claim part of a work item's value: everything not rejected. */
+const CLAIMING: ExpenseStatus[] = ["SUBMITTED", "OWNER_REVIEW", "APPROVED", "PROCESSING", "PAID"];
+
+/**
+ * How much of a work item's value is still free to invoice. Work can be billed in instalments
+ * (a deposit, progress claims, the balance), but never for more than it's worth in total.
+ */
+export function invoiceRoom(workValue: number, invoices: { amount: number; status: ExpenseStatus }[]) {
+  const claimed = invoices.filter((i) => CLAIMING.includes(i.status)).reduce((s, i) => s + i.amount, 0);
+  return Math.max(workValue - claimed, 0);
 }
 
 export function retentionFor(amount: number, percent: number) {

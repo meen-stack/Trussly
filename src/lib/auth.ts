@@ -15,8 +15,8 @@ export async function checkPassword(pw: string, hash: string) {
   return bcrypt.compare(pw, hash);
 }
 
-export async function startSession(user: { id: string; companyId: string; role: Role }) {
-  const token = await signSession({ userId: user.id, companyId: user.companyId, role: user.role });
+export async function startSession(user: { id: string; companyId: string; role: Role; sessionVersion: number }) {
+  const token = await signSession({ userId: user.id, companyId: user.companyId, role: user.role, v: user.sessionVersion });
   (await cookies()).set(SESSION_COOKIE, token, sessionCookieOptions);
 }
 
@@ -28,7 +28,10 @@ export async function endSession() {
 export const getCurrentUser = cache(async () => {
   const session = await verifySession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!session) return null;
-  return db.user.findUnique({ where: { id: session.userId }, include: { company: true } });
+  const user = await db.user.findUnique({ where: { id: session.userId }, include: { company: true } });
+  // A password change bumps the version, so sessions from before it stop working.
+  if (!user || user.sessionVersion !== (session.v ?? 0)) return null;
+  return user;
 });
 
 export async function requireUser() {

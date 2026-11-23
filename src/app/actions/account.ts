@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { endSession, requireUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { parseMoney } from "@/lib/money";
 import type { Role } from "@prisma/client";
 import { DELEGABLE_ROLES } from "@/lib/release";
@@ -107,4 +108,16 @@ export async function updateApprovals(_: FormState, form: FormData): Promise<For
   );
   revalidatePath("/", "layout");
   return { success: "Saved." };
+}
+
+/** Ends every session for this account, on every device, including this one. */
+export async function signOutEverywhere() {
+  const user = await requireUser();
+  // The shared demo accounts are used by many visitors at once, so they can't sign each other out.
+  if (!user.email.endsWith("@demo.trussly.app")) {
+    await db.user.update({ where: { id: user.id }, data: { sessionVersion: { increment: 1 } } });
+    await audit(user.id, "signed out on every device", "User", user.id);
+  }
+  await endSession();
+  redirect("/login");
 }

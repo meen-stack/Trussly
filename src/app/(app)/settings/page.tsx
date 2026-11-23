@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth";
 import { Card, Field, Input, PageHeader, Select } from "@/components/ui";
 import { ActionForm } from "@/components/action-form";
-import { updateApprovals, updateCompany, updateMyName } from "@/app/actions/account";
+import { signOutEverywhere, updateApprovals, updateCompany, updateMyName } from "@/app/actions/account";
 import { format } from "date-fns";
 import { renameStatus } from "@/lib/name-limits";
 import { DELEGABLE_ROLES } from "@/lib/release";
@@ -49,6 +49,10 @@ export default async function SettingsPage() {
               )}
             </div>
           </details>
+          <form action={signOutEverywhere} className="mt-4 border-t border-line pt-4">
+            <button className="text-sm font-medium text-bad hover:underline">Sign out on every device</button>
+            <p className="mt-1 text-xs text-muted">Use this if you think someone else has your password. Resetting your password does it too.</p>
+          </form>
         </Card>
         {user.role === "OWNER" && (
           <Card className="p-6">

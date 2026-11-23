@@ -18,3 +18,9 @@ export async function openProject(page: Page, name: string, tab?: string) {
 
 export const PHOTO = "tests/e2e/fixtures/site.png";
 export const VIDEO = "tests/e2e/fixtures/site.webm";
+
+/** Picks the option whose text starts with `text`, for selects that add details after the name. */
+export async function pickOption(page: Page, select: string, text: string) {
+  const value = await page.locator(`select[name="${select}"] option`, { hasText: text }).first().getAttribute("value");
+  await page.locator(`select[name="${select}"]`).selectOption(value!);
+}

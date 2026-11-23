@@ -141,6 +141,11 @@ model User {
   notifications   Notification[]
   auditEvents     AuditEvent[]
   resetTokens     PasswordReset[]
+  /// Bumped when the password changes, which signs out every existing session.
+  sessionVersion  Int                  @default(0)
+  /// Failed sign-ins in a row; the account locks for a while after too many.
+  failedLogins    Int                  @default(0)
+  lockedUntil     DateTime?
 }
 
 model Invite {
@@ -232,6 +237,12 @@ model Milestone {
   inspectedAt   DateTime?
   approvedAt    DateTime?
   verifiedAt    DateTime?
+  /// Who did each step, so nobody approves work they submitted or inspected.
+  submittedById String?
+  inspectedById String?
+  approvedById  String?
+  /// The last person to pass, fail, approve, return or reject it. They can't settle a dispute about it.
+  decidedById   String?
   photos        Photo[]
   invoices      Expense[]
   changeOrders  ChangeOrder[]
@@ -294,6 +305,8 @@ model Expense {
   dueDate               DateTime?
   createdAt             DateTime       @default(now())
   decidedAt             DateTime?
+  /// The last person to approve or reject it. They can't settle a dispute about it.
+  decidedById           String?
   payments              Payment[]
   retentionReleasedAt   DateTime? // set at handover; the retention then becomes payable
   retentionReleasedById String?
@@ -331,7 +344,8 @@ model AuditEvent {
   projectId  String?
   project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   actorId    String
-  actor      User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  /// Restrict: deleting a person must never erase what they did.
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
   action     String
   entityType String
   entityId   String

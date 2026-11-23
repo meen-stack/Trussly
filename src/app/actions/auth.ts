@@ -10,6 +10,8 @@ import { checkPassword, endSession, hashPassword, requireUser, startSession } fr
 import { appUrl, sendEmail } from "@/lib/email";
 import { can } from "@/lib/permissions";
 import { DEMO_EMAILS } from "@/lib/demo";
+import { afterFailedLogin, lockedFor } from "@/lib/lockout";
+import { audit } from "@/lib/notify";
 
 export type FormState = { error?: string; success?: string } | undefined;
 
@@ -20,9 +22,13 @@ export async function login(_: FormState, form: FormData): Promise<FormState> {
   const parsed = z.object({ email, password: z.string().min(1) }).safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: "Enter your email and password." };
   const user = await db.user.findUnique({ where: { email: parsed.data.email } });
+  const minutes = lockedFor(user?.lockedUntil ?? null);
+  if (minutes > 0) return { error: `Too many wrong passwords. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}, or reset your password.` };
   if (!user || !(await checkPassword(parsed.data.password, user.passwordHash))) {
+    if (user) await db.user.update({ where: { id: user.id }, data: afterFailedLogin(user.failedLogins) });
     return { error: "That email and password don't match." };
   }
+  if (user.failedLogins > 0 || user.lockedUntil) await db.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
   await startSession(user);
   redirect("/dashboard");
 }
@@ -74,11 +80,16 @@ export async function resetPassword(_: FormState, form: FormData): Promise<FormS
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const reset = await db.passwordReset.findUnique({ where: { token: parsed.data.token }, include: { user: true } });
   if (!reset || reset.usedAt || reset.expiresAt < new Date()) return { error: "This reset link has expired. Ask for a new one." };
-  await db.$transaction([
-    db.user.update({ where: { id: reset.userId }, data: { passwordHash: await hashPassword(parsed.data.password) } }),
-    db.passwordReset.update({ where: { id: reset.id }, data: { usedAt: new Date() } }),
+  // A new password signs out every other session, clears any lockout and kills older reset links.
+  const [user] = await db.$transaction([
+    db.user.update({
+      where: { id: reset.userId },
+      data: { passwordHash: await hashPassword(parsed.data.password), sessionVersion: { increment: 1 }, failedLogins: 0, lockedUntil: null },
+    }),
+    db.passwordReset.updateMany({ where: { userId: reset.userId, usedAt: null }, data: { usedAt: new Date() } }),
   ]);
-  await startSession(reset.user);
+  await audit(user.id, "reset their password and signed out everywhere", "User", user.id);
+  await startSession(user);
   redirect("/dashboard");
 }
 

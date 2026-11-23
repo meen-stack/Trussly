@@ -9,6 +9,8 @@ import { canDecideChange, poTotal } from "./commercial";
 /** Work waiting on this user, by role. Shared by the nav badge, dashboard and approvals page. */
 export function approvalWhere(user: CurrentUser) {
   const project = visibleProjectsWhere(user);
+  // `not` alone skips nulls in SQL, so "not done by me" has to allow nobody too.
+  const notBy = (field: "submittedById" | "inspectedById" | "approvedById"): Prisma.MilestoneWhereInput => ({ OR: [{ [field]: null }, { [field]: { not: user.id } }] });
   const reports: Prisma.DailyReportWhereInput | null = user.role === "MANAGER" ? { status: "SUBMITTED", project } : null;
   const ownWork: Prisma.MilestoneWhereInput | null =
     user.role === "SUPERVISOR"
@@ -20,8 +22,10 @@ export function approvalWhere(user: CurrentUser) {
           : user.role === "CONTRACTOR"
             ? { status: "CORRECTIONS", assigneeId: user.id, project }
             : null;
-  const delegateWork: Prisma.MilestoneWhereInput | null = actsForOwner(user.role, user.company) ? { status: "AWAITING_OWNER", project } : null;
-  const work = ownWork && delegateWork ? { OR: [ownWork, delegateWork] } : (ownWork ?? delegateWork);
+  const delegateWork: Prisma.MilestoneWhereInput | null = actsForOwner(user.role, user.company) ? { status: "AWAITING_OWNER", project, AND: [notBy("approvedById")] } : null;
+  const anyWork = ownWork && delegateWork ? { OR: [ownWork, delegateWork] } : (ownWork ?? delegateWork);
+  // Leave out work this person submitted or inspected: someone else must check it (see separationError).
+  const work: Prisma.MilestoneWhereInput | null = anyWork && user.role !== "CONTRACTOR" ? { AND: [anyWork, notBy("submittedById"), notBy("inspectedById")] } : anyWork;
   const own: Prisma.ExpenseWhereInput | null =
     user.role === "MANAGER"
       ? { status: "SUBMITTED", budgetLine: { project } }

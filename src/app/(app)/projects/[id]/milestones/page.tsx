@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { format } from "date-fns";
-import { Check, User } from "lucide-react";
+import { Check, History, User } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { getProjectForUser } from "@/lib/access";
 import { invoiceScope } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/money";
-import { workOptions } from "@/lib/workflow";
+import { separationError, workOptions, WORK_ACTIONS, nextWorkStatus } from "@/lib/workflow";
+import { ROLE_LABEL } from "@/lib/permissions";
 import { paidOf } from "@/lib/status";
 import { Card, EmptyState, Field, Input, Select, Textarea, cn } from "@/components/ui";
 import { WorkBadge, WorkPaymentBadge } from "@/components/status";
@@ -41,7 +42,8 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
   const user = await requireUser();
   const project = await getProjectForUser(user, id);
   const { currency, approvalThreshold: threshold } = user.company;
-  const [work, contractors] = await Promise.all([
+  const finances = can.seeProjectFinances(user.role);
+  const [work, contractors, history] = await Promise.all([
     db.milestone.findMany({
       where: { projectId: project.id },
       include: {
@@ -63,19 +65,31 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
       },
       orderBy: { name: "asc" },
     }),
+    // Approval history for each work item: every step, by whom and when.
+    db.auditEvent.findMany({
+      where: { projectId: project.id, entityType: "Milestone" },
+      include: { actor: { select: { name: true, role: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
-  const verified = work.filter((m) => m.status === "VERIFIED").reduce((s, m) => s + m.paymentAmount, 0);
-  const total = work.reduce((s, m) => s + m.paymentAmount, 0);
-  const paid = work.flatMap((m) => m.invoices).reduce((s, i) => s + paidOf(i), 0);
+  const historyOf = (id: string) => history.filter((e) => e.entityId === id);
+  // People who don't see the project's finances only see the value of their own work.
+  const showValue = (m: { assigneeId: string | null }) => finances || (user.role === "CONTRACTOR" && m.assigneeId === user.id);
+  const counted = work.filter(showValue);
+  const verified = counted.filter((m) => m.status === "VERIFIED").reduce((s, m) => s + m.paymentAmount, 0);
+  const total = counted.reduce((s, m) => s + m.paymentAmount, 0);
+  const paid = counted.flatMap((m) => m.invoices).reduce((s, i) => s + paidOf(i), 0);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {counted.length > 0 && (
         <div className="flex flex-wrap gap-2 text-sm">
           <span className="rounded-full bg-ok/10 px-3 py-1 font-medium text-ok">{formatMoney(verified, currency)} verified</span>
           <span className="rounded-full bg-surface px-3 py-1 text-muted ring-1 ring-line">{formatMoney(total, currency)} total</span>
           <span className="rounded-full bg-surface px-3 py-1 text-muted ring-1 ring-line">{formatMoney(paid, currency)} paid</span>
         </div>
+        )}
         {work.length === 0 && (
           <Card>
             <EmptyState title="No work yet" />
@@ -83,7 +97,16 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
         )}
         {work.map((m) => {
           const mine = user.role !== "CONTRACTOR" || !m.assigneeId || m.assigneeId === user.id;
-          const options = mine ? workOptions(m.status, m.status === "AWAITING_OWNER" && actsForOwner(user.role, user.company) ? "OWNER" : user.role, m.paymentAmount, threshold) : [];
+          const actingRole = m.status === "AWAITING_OWNER" && actsForOwner(user.role, user.company) ? "OWNER" : user.role;
+          const options = mine ? workOptions(m.status, actingRole, m.paymentAmount, threshold, user.id, m) : [];
+          // Say why when the role could act but this person did an earlier step.
+          const blockedBy =
+            mine && options.length === 0
+              ? WORK_ACTIONS.filter((a) => nextWorkStatus(m.status, a, actingRole, m.paymentAmount, threshold).ok)
+                  .map((a) => separationError(m.status, a, user.id, m))
+                  .find(Boolean)
+              : null;
+          const events = historyOf(m.id);
           const reached = REACHED[m.status];
           const needsOwner = m.paymentAmount > threshold;
           const steps = ["Submitted", "Inspected", "Manager", ...(needsOwner ? ["Owner"] : []), "Verified"];
@@ -101,7 +124,7 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold">{formatMoney(m.paymentAmount, currency)}</p>
+                  {showValue(m) && <p className="text-sm font-semibold">{formatMoney(m.paymentAmount, currency)}</p>}
                   <p className={cn("mt-0.5 text-xs", overdue ? "font-medium text-bad" : "text-muted")}>
                     {overdue ? "Overdue · " : "Due "}
                     {format(m.dueDate, "MMM d, yyyy")}
@@ -157,6 +180,26 @@ export default async function WorkPage({ params }: PageProps<"/projects/[id]/mil
                 </div>
               )}
               <WorkActions action={transitionWork.bind(null, project.id, m.id)} options={options} folder={`projects/${project.id}`} direct={directUploads} />
+              {blockedBy && <p className="mt-3 rounded-lg bg-bg px-3 py-2 text-xs text-muted">{blockedBy}</p>}
+              {events.length > 0 && (
+                <details className="mt-3 text-sm">
+                  <summary className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted">
+                    <History className="h-3.5 w-3.5" /> History ({events.length})
+                  </summary>
+                  <ol className="mt-2 space-y-1.5 border-l-2 border-line pl-3 text-xs">
+                    {events.map((e) => {
+                      const note = (e.detail as { note?: string } | null)?.note;
+                      return (
+                        <li key={e.id}>
+                          <span className="text-muted">{format(e.createdAt, "MMM d, h:mm a")} · </span>
+                          <span className="font-medium">{e.actor.name}</span> <span className="text-muted">({ROLE_LABEL[e.actor.role]})</span> {e.action}
+                          {note && <span className="block text-muted">&ldquo;{note}&rdquo;</span>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
+              )}
               {m.ratings[0] && (
                 <p className="mt-3 text-sm">
                   <span className="font-medium">Rating {ratingScore(m.ratings[0]).toFixed(1)}/5</span>

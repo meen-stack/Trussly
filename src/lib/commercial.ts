@@ -92,8 +92,12 @@ export function openOrderValue(total: number, invoiced: number) {
 export type DisputeState = "OPEN" | "ESCALATED" | "RESOLVED";
 
 /** Anyone on the project can raise a dispute; the manager can escalate; the manager or owner resolves (only the owner once escalated). */
-export function disputeAction(current: DisputeState, action: "escalate" | "resolve", role: Role): Result<DisputeState> {
+export function disputeAction(current: DisputeState, action: "escalate" | "resolve", role: Role, decidedByMe = false): Result<DisputeState> {
   if (current === "RESOLVED") return { ok: false, error: "This dispute is already resolved." };
+  // Nobody settles a dispute about their own decision: the manager who rejected the work escalates it instead.
+  if (action === "resolve" && decidedByMe && role !== "OWNER" && role !== "ADMIN") {
+    return { ok: false, error: "You made the decision being disputed, so escalate it to the owner." };
+  }
   if (action === "escalate") {
     if (current === "ESCALATED") return { ok: false, error: "Already escalated to the owner." };
     if (role !== "MANAGER" && role !== "CONTRACTOR" && role !== "SUPERVISOR") return { ok: false, error: "Only the people on site can escalate." };
@@ -102,6 +106,18 @@ export function disputeAction(current: DisputeState, action: "escalate" | "resol
   if (role === "OWNER" || role === "ADMIN") return { ok: true, next: "RESOLVED" };
   if (role === "MANAGER" && current === "OPEN") return { ok: true, next: "RESOLVED" };
   return { ok: false, error: current === "ESCALATED" ? "Escalated disputes are resolved by the owner." : "Only the manager or owner can resolve disputes." };
+}
+
+/**
+ * What settling a dispute in the contractor's favour reopens: rejected work goes back for
+ * corrections so it can be resubmitted, a rejected invoice goes back for review, and an invoice
+ * whose payment was refused goes back to finance. Null when there's nothing to reopen.
+ */
+export function reopenAfterDispute(about: { work?: { status: string } | null; invoice?: { status: string } | null }) {
+  if (about.work?.status === "REJECTED") return { kind: "work" as const, next: "CORRECTIONS" as const };
+  if (about.invoice?.status === "REJECTED") return { kind: "invoice" as const, next: "SUBMITTED" as const };
+  if (about.invoice?.status === "PAYMENT_REJECTED") return { kind: "invoice" as const, next: "APPROVED" as const };
+  return null;
 }
 
 /** An invoice can't be paid while a dispute about it is open. */

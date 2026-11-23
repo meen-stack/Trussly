@@ -10,6 +10,11 @@ export const can = {
   /** Finance records and tracks payments. */
   pay: (r: Role) => r === "FINANCE" || r === "ADMIN",
   seeFinance: (r: Role) => r === "FINANCE" || r === "ADMIN" || r === "OWNER" || r === "MANAGER",
+  /**
+   * The project's budget, spend, forecast and everyone's invoices. Contractors and supervisors
+   * only see the money on their own work and invoices.
+   */
+  seeProjectFinances: (r: Role) => r === "FINANCE" || r === "ADMIN" || r === "OWNER" || r === "MANAGER",
   inviteUsers: (r: Role) => r === "ADMIN" || r === "OWNER",
   /** Owners, admins and finance see every company project; others only projects they belong to. */
   rate: (r: Role) => r === "MANAGER" || r === "OWNER" || r === "SUPERVISOR",

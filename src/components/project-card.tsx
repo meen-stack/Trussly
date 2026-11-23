@@ -4,7 +4,8 @@ import { Badge, Card, Progress } from "./ui";
 import { formatMoney } from "@/lib/money";
 import { health, type ProjectSummary } from "@/lib/project-data";
 
-export function ProjectCard({ s, currency }: { s: ProjectSummary; currency: string }) {
+/** `finances` shows the budget; contractors and supervisors don't see the project's money. */
+export function ProjectCard({ s, currency, finances = true }: { s: ProjectSummary; currency: string; finances?: boolean }) {
   const h = health(s);
   const spentPct = Math.round(s.budget.ratio * 100);
   return (
@@ -36,6 +37,7 @@ export function ProjectCard({ s, currency }: { s: ProjectSummary; currency: stri
               </div>
               <Progress value={s.progress} tone={s.behindBy > 15 ? "bad" : s.behindBy > 5 ? "warn" : "brand"} />
             </div>
+            {finances && (
             <div>
               <div className="mb-1 flex justify-between">
                 <span className="text-muted">Spent</span>
@@ -45,6 +47,7 @@ export function ProjectCard({ s, currency }: { s: ProjectSummary; currency: stri
               </div>
               <Progress value={spentPct} tone={spentPct > 100 ? "bad" : spentPct >= 90 ? "warn" : "ok"} />
             </div>
+            )}
           </div>
         </div>
       </Card>
